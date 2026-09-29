@@ -759,7 +759,7 @@
 
         <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
           <button class="btn btn-warning" onclick="abrirFormularioEdicion('${p.id}')">✏️ Editar Pieza</button>
-          <button class="btn btn-danger" onclick="borrarProducto('${p.id}')">🗑️️ Eliminar</button>
+          <button class="btn btn-danger" onclick="borrarProducto('${p.id}')">🗑 Eliminar</button>
         </div>
       `;
       modal.classList.add('active');
@@ -771,7 +771,7 @@
 
       const body = document.getElementById('modalContent');
       body.innerHTML = `
-        <h2 style="color:var(--warning); margin-bottom:15px;">✏️ Editar Pieza: ${p.nombre}</h2>
+        <h2 style="color:var(--warning); margin-bottom:15px;">✏️️ Editar Pieza: ${p.nombre}</h2>
         <form onsubmit="guardarEdicionPieza(event, '${p.id}')">
           <div class="form-group">
             <label>Nombre de la Pieza *</label>
@@ -994,8 +994,17 @@
       alert('Ajustes guardados.');
     }
 
-    // Inicializar
+    // Inicializar datos
     cargarDatosDesdeNube();
+  </script>
+
+  <!-- Script para registrar el Service Worker de la PWA -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js')
+        .then(() => console.log('Service Worker registrado correctamente'))
+        .catch((err) => console.log('Error al registrar Service Worker:', err));
+    }
   </script>
 </body>
 </html>
