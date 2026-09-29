@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gestor 3D Industrial - V6</title>
-  <!-- JSZip para descomprimir archivos .3mf de Bambu Studio -->
+  <title>Gestor 3D Industrial - Cloud V7</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#38bdf8">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --bg-dark: #0b0f17;
@@ -24,7 +26,6 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
     body { background-color: var(--bg-dark); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
 
-    /* Navegación Centrada */
     navbar {
       background-color: var(--panel-bg);
       border-bottom: 2px solid var(--border);
@@ -42,8 +43,8 @@
     }
 
     .nav-btn {
-      flex: 1; min-width: 110px; background-color: var(--card-bg); border: 1px solid var(--border);
-      color: var(--text-main); padding: 12px; border-radius: 8px; cursor: pointer; font-size: 0.95rem; font-weight: 700;
+      flex: 1; min-width: 100px; background-color: var(--card-bg); border: 1px solid var(--border);
+      color: var(--text-main); padding: 12px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 700;
       text-align: center; transition: all 0.2s;
     }
 
@@ -52,12 +53,10 @@
       box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
     }
 
-    /* Layout principal */
     main { flex: 1; padding: 20px; max-width: 1200px; margin: 0 auto; width: 100%; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
-    /* Tarjetas y Estructura */
     .grid-2 { display: grid; grid-template-columns: 1fr; gap: 20px; }
     @media (min-width: 850px) { .grid-2 { grid-template-columns: 1.1fr 0.9fr; } }
 
@@ -67,7 +66,6 @@
       padding-bottom: 10px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;
     }
 
-    /* Formularios */
     .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
     label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
     input, select, textarea {
@@ -78,7 +76,6 @@
     .row { display: flex; gap: 12px; }
     .row .form-group { flex: 1; }
 
-    /* Checklist de Filamentos */
     .fil-checklist {
       background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px;
       padding: 10px; max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
@@ -86,7 +83,6 @@
     .fil-item { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }
     .fil-item input[type="checkbox"] { width: auto; cursor: pointer; }
 
-    /* Botones */
     .btn {
       background-color: var(--accent); color: #000; border: none; padding: 12px 20px; border-radius: 8px;
       font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.2s; display: inline-flex;
@@ -98,7 +94,6 @@
     .btn-warning { background-color: var(--warning); color: #000; }
     .btn-danger { background-color: var(--danger); color: white; }
 
-    /* Rejillas Catálogo */
     .catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
     .product-card {
       background-color: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
@@ -108,7 +103,6 @@
     .product-img { width: 100%; height: 180px; object-fit: cover; background: var(--bg-dark); border-bottom: 1px solid var(--border); }
     .product-body { padding: 15px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
 
-    /* Filtros por Carpeta */
     .folder-bar { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 15px; }
     .folder-chip {
       background: var(--card-bg); border: 1px solid var(--border); padding: 8px 16px; border-radius: 20px;
@@ -116,13 +110,11 @@
     }
     .folder-chip.active { background: var(--accent); color: #000; border-color: var(--accent); }
 
-    /* Tablas */
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 10px; }
     th, td { padding: 10px; text-align: right; border-bottom: 1px solid var(--border); }
     th:first-child, td:first-child { text-align: left; }
     th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
 
-    /* Modal */
     .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; z-index: 100; padding: 20px; }
     .modal.active { display: flex; }
     .modal-body { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 750px; max-height: 90vh; overflow-y: auto; padding: 22px; position: relative; }
@@ -137,7 +129,7 @@
 <body>
 
   <navbar>
-    <div class="brand">⚙️ Gestor 3D Industrial</div>
+    <div class="brand">⚙️ Gestor 3D Cloud</div>
     <div class="nav-links">
       <button class="nav-btn active" onclick="switchTab('calculadora')">🧮 Calculadora</button>
       <button class="nav-btn" onclick="switchTab('catalogo')">📦 Piezas</button>
@@ -161,9 +153,7 @@
 
           <div class="form-group">
             <label>Carpeta de Empresa / Cliente</label>
-            <select id="cEmpresaSel">
-              <!-- Cargado dinámicamente -->
-            </select>
+            <select id="cEmpresaSel"></select>
           </div>
 
           <div class="form-group">
@@ -273,7 +263,7 @@
           </table>
 
           <button class="btn btn-success" style="width: 100%; margin-top: 20px;" onclick="guardarEnCatalogo()">
-            💾 Guardar esta Pieza en Catálogo
+            💾 Guardar esta Pieza en la Nube
           </button>
         </div>
       </div>
@@ -395,7 +385,6 @@
     </div>
   </main>
 
-  <!-- MODAL FICHA TÉCNICA / EDICIÓN -->
   <div class="modal" id="modalProducto">
     <div class="modal-body">
       <span class="close-modal" onclick="closeModal()">&times;</span>
@@ -404,26 +393,47 @@
   </div>
 
   <script>
-    const CONFIG_KEY = '3d_cfg_v6';
-    const PRODS_KEY = '3d_prods_v6';
-    const FILS_KEY = '3d_fils_v6';
-    const EMPS_KEY = '3d_emps_v6';
+    // CONEXIÓN DIRECTA CON SUPABASE
+    const SUPABASE_URL = 'https://sdpvbkzwtvmnvugjdtyu.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_Bznesuy1Ygz2cwmW_LcTsQ_n52wHT1O';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     const defaultConfig = { filamento: 20, horaMaquina: 0.20, extraColor: 0.05, gastosFijos: 0.00, multiplicador: 2.0 };
+    let config = JSON.parse(localStorage.getItem('3d_cfg_v7')) || defaultConfig;
 
-    let config = JSON.parse(localStorage.getItem(CONFIG_KEY)) || defaultConfig;
-    let productos = JSON.parse(localStorage.getItem(PRODS_KEY)) || [];
-    let filamentos = JSON.parse(localStorage.getItem(FILS_KEY)) || [
-      { id: 'f1', marca: 'Bambu Lab', tipo: 'PLA Basic', color: 'Blanco Huevo', precioKg: 20, url: 'https://store.bambulab.com', foto: '' },
-      { id: 'f2', marca: 'eSUN', tipo: 'PETG Refill', color: 'Gris Antracita', precioKg: 19, url: 'https://esun3d.com', foto: '' }
-    ];
-    let empresas = JSON.parse(localStorage.getItem(EMPS_KEY)) || [
-      { id: 'emp_general', nombre: 'General / Sin Carpeta', logo: '' },
-      { id: 'emp_atlantico', nombre: 'Atlántico', logo: '' },
-      { id: 'emp_gocozi', nombre: 'Gocozi', logo: '' }
-    ];
+    let productos = [];
+    let filamentos = [];
+    let empresas = [];
 
     let carpetaFiltroActual = 'TODAS';
+
+    async function cargarDatosDesdeNube() {
+      try {
+        const { data: emps } = await _supabase.from('empresas').select('*').order('created_at', { ascending: false });
+        empresas = emps || [];
+        if (!empresas.some(e => e.id === 'emp_general')) {
+          empresas.unshift({ id: 'emp_general', nombre: 'General / Sin Carpeta', logo: '' });
+        }
+
+        const { data: fils } = await _supabase.from('filamentos').select('*').order('created_at', { ascending: false });
+        filamentos = fils || [];
+
+        const { data: prods } = await _supabase.from('productos').select('*').order('created_at', { ascending: false });
+        productos = (prods || []).map(p => ({
+          ...p,
+          empresaId: p.empresa_id,
+          descuentoPct: p.descuento_pct,
+          filamentosIds: p.filamentos_ids || [],
+          costeTotal: p.coste_total,
+          precioVenta: p.precio_venta
+        }));
+
+        cargarCalculadora();
+        renderCatalogo();
+      } catch (e) {
+        console.error("Error al cargar desde la nube:", e);
+      }
+    }
 
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -439,14 +449,13 @@
       if(tabId === 'ajustes') cargarAjustesInputs();
     }
 
-    // .3mf Extractor
     async function procesarArchivo3MF(e) {
       const file = e.target.files[0];
       if (!file) return;
 
       const status = document.getElementById('status3mf');
       if (file.name.endsWith('.3mf')) {
-        status.textContent = 'Procesando .3mf de Bambu Studio...';
+        status.textContent = 'Procesando .3mf...';
         try {
           const zip = await JSZip.loadAsync(file);
           const fotoFile = zip.file('Metadata/plate_1.png') || zip.file('Metadata/thumbnail.png');
@@ -461,7 +470,7 @@
             img.style.display = 'block';
             status.textContent = '¡Vista previa extraída con éxito de Bambu Studio!';
           } else {
-            status.textContent = 'No se encontró la miniatura interna en el .3mf.';
+            status.textContent = 'Sin miniatura en el .3mf.';
           }
         } catch (err) {
           status.textContent = 'Error al leer el archivo .3mf.';
@@ -489,10 +498,11 @@
 
       filamentos.forEach(f => {
         const checked = selectedIds.includes(f.id) ? 'checked' : '';
+        const precio = f.precio_kg || f.precioKg;
         container.innerHTML += `
           <label class="fil-item">
             <input type="checkbox" value="${f.id}" ${checked} onchange="calcular()">
-            <span><strong>${f.marca}</strong> - ${f.color} (${f.tipo}) - ${f.precioKg}€/kg</span>
+            <span><strong>${f.marca}</strong> - ${f.color} (${f.tipo}) - ${precio}€/kg</span>
           </label>
         `;
       });
@@ -533,7 +543,7 @@
         let suma = 0;
         selFils.forEach(id => {
           const f = filamentos.find(x => x.id === id);
-          if(f) suma += f.precioKg;
+          if(f) suma += parseFloat(f.precio_kg || f.precioKg);
         });
         precioKg = suma / selFils.length;
       }
@@ -561,7 +571,6 @@
       document.getElementById('rDescVal').textContent = descuentoPct + ' %';
       document.getElementById('rPrecioUnitario').textContent = precioVenta.toFixed(2) + ' €';
 
-      // Lote Custom
       const cantCustom = parseInt(document.getElementById('cLoteCustom').value) || 1000;
       const totalCustom = precioVenta * cantCustom;
       const beneficioCustom = (precioVenta - costeTotal) * cantCustom;
@@ -569,7 +578,6 @@
       document.getElementById('rLoteCustomTotal').textContent = totalCustom.toFixed(2) + ' €';
       document.getElementById('rLoteCustomBeneficio').textContent = '+' + beneficioCustom.toFixed(2) + ' €';
 
-      // Lotes Fijos
       const tbody = document.getElementById('tablaLotes');
       tbody.innerHTML = '';
       [100, 500, 1000, 5000].forEach(cant => {
@@ -585,36 +593,36 @@
       return { costeTotal, precioVenta, descuentoPct };
     }
 
-    function guardarEnCatalogo() {
+    async function guardarEnCatalogo() {
       const nombre = document.getElementById('cNombre').value.trim();
       if(!nombre) { alert('Escribe el nombre de la pieza.'); return; }
 
       const res = calcular();
       const selFils = obtenerFilamentosSeleccionados('cFilamentosChecklist');
 
-      const prod = {
-        id: Date.now().toString(),
+      const newId = 'prod_' + Date.now();
+      const dbProd = {
+        id: newId,
         nombre: nombre,
-        empresaId: document.getElementById('cEmpresaSel').value,
+        empresa_id: document.getElementById('cEmpresaSel').value,
         peso: parseFloat(document.getElementById('cPeso').value),
         colores: parseInt(document.getElementById('cColores').value),
         horas: parseFloat(document.getElementById('cHoras').value) || 0,
         minutos: parseFloat(document.getElementById('cMinutos').value) || 0,
-        descuentoPct: res.descuentoPct,
-        filamentosIds: selFils,
+        descuento_pct: res.descuentoPct,
+        filamentos_ids: selFils,
         foto: document.getElementById('cFotoBase64').value,
         notas: document.getElementById('cNotas').value,
-        costeTotal: res.costeTotal,
-        precioVenta: res.precioVenta
+        coste_total: res.costeTotal,
+        precio_venta: res.precioVenta
       };
 
-      productos.unshift(prod);
-      localStorage.setItem(PRODS_KEY, JSON.stringify(productos));
-      alert('¡Pieza guardada correctamente en el catálogo!');
+      await _supabase.from('productos').insert([dbProd]);
+      await cargarDatosDesdeNube();
+      alert('¡Pieza guardada en la Nube correctamente!');
       switchTab('catalogo');
     }
 
-    // EMPRESAS
     function previewLogoEmpresa(e) {
       const file = e.target.files[0];
       if(!file) return;
@@ -628,17 +636,18 @@
       reader.readAsDataURL(file);
     }
 
-    function guardarEmpresa(e) {
+    async function guardarEmpresa(e) {
       e.preventDefault();
-      const emp = {
+      const newEmp = {
         id: 'emp_' + Date.now(),
         nombre: document.getElementById('eNombreEmpresa').value,
         logo: document.getElementById('eLogoBase64').value
       };
-      empresas.push(emp);
-      localStorage.setItem(EMPS_KEY, JSON.stringify(empresas));
+
+      await _supabase.from('empresas').insert([newEmp]);
       document.getElementById('empresaForm').reset();
       document.getElementById('imgPreviewLogo').style.display = 'none';
+      await cargarDatosDesdeNube();
       renderEmpresas();
     }
 
@@ -657,13 +666,11 @@
       });
     }
 
-    // CATÁLOGO & VISTA DE CARPETAS
     function renderCatalogo() {
       const search = document.getElementById('catSearch').value.toLowerCase();
       const grid = document.getElementById('catalogGrid');
       const folderBar = document.getElementById('folderBar');
 
-      // Barra de carpetas
       folderBar.innerHTML = `<div class="folder-chip ${carpetaFiltroActual === 'TODAS' ? 'active' : ''}" onclick="filtrarPorCarpeta('TODAS')">📁 Todas las Carpetas</div>`;
       empresas.forEach(emp => {
         folderBar.innerHTML += `<div class="folder-chip ${carpetaFiltroActual === emp.id ? 'active' : ''}" onclick="filtrarPorCarpeta('${emp.id}')">📁 ${emp.nombre}</div>`;
@@ -752,7 +759,7 @@
 
         <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
           <button class="btn btn-warning" onclick="abrirFormularioEdicion('${p.id}')">✏️ Editar Pieza</button>
-          <button class="btn btn-danger" onclick="borrarProducto('${p.id}')">🗑️ Eliminar</button>
+          <button class="btn btn-danger" onclick="borrarProducto('${p.id}')">🗑️️ Eliminar</button>
         </div>
       `;
       modal.classList.add('active');
@@ -854,11 +861,8 @@
       }
     }
 
-    function guardarEdicionPieza(e, id) {
+    async function guardarEdicionPieza(e, id) {
       e.preventDefault();
-      const p = productos.find(x => x.id === id);
-      if(!p) return;
-
       const peso = parseFloat(document.getElementById('ePeso').value) || 0;
       const colores = parseInt(document.getElementById('eColores').value) || 1;
       const horas = parseFloat(document.getElementById('eHoras').value) || 0;
@@ -871,7 +875,7 @@
         let suma = 0;
         selFils.forEach(fId => {
           const f = filamentos.find(x => x.id === fId);
-          if(f) suma += f.precioKg;
+          if(f) suma += parseFloat(f.precio_kg || f.precioKg);
         });
         precioKg = suma / selFils.length;
       }
@@ -886,26 +890,27 @@
         precioVenta = precioVenta * (1 - (descuentoPct / 100));
       }
 
-      p.nombre = document.getElementById('eNombre').value;
-      p.empresaId = document.getElementById('eEmpresaSel').value;
-      p.peso = peso;
-      p.colores = colores;
-      p.horas = horas;
-      p.minutos = mins;
-      p.descuentoPct = descuentoPct;
-      p.foto = document.getElementById('eFotoBase64').value;
-      p.filamentosIds = selFils;
-      p.notas = document.getElementById('eNotas').value;
-      p.costeTotal = costeTotal;
-      p.precioVenta = precioVenta;
+      const dbProd = {
+        nombre: document.getElementById('eNombre').value,
+        empresa_id: document.getElementById('eEmpresaSel').value,
+        peso: peso,
+        colores: colores,
+        horas: horas,
+        minutos: mins,
+        descuento_pct: descuentoPct,
+        foto: document.getElementById('eFotoBase64').value,
+        filamentos_ids: selFils,
+        notas: document.getElementById('eNotas').value,
+        coste_total: costeTotal,
+        precio_venta: precioVenta
+      };
 
-      localStorage.setItem(PRODS_KEY, JSON.stringify(productos));
-      alert('¡Pieza actualizada con éxito!');
-      verFicha(p.id);
-      renderCatalogo();
+      await _supabase.from('productos').update(dbProd).eq('id', id);
+      await cargarDatosDesdeNube();
+      alert('¡Pieza actualizada en la Nube!');
+      closeModal();
     }
 
-    // FILAMENTOS
     function previewFotoFilamento(e) {
       const file = e.target.files[0];
       if(!file) return;
@@ -919,22 +924,22 @@
       reader.readAsDataURL(file);
     }
 
-    function guardarFilamento(e) {
+    async function guardarFilamento(e) {
       e.preventDefault();
       const fil = {
         id: 'f_' + Date.now(),
         marca: document.getElementById('fMarca').value,
         tipo: document.getElementById('fTipo').value,
         color: document.getElementById('fColor').value,
-        precioKg: parseFloat(document.getElementById('fPrecioKg').value),
+        precio_kg: parseFloat(document.getElementById('fPrecioKg').value),
         url: document.getElementById('fUrl').value,
         foto: document.getElementById('fFotoBase64').value
       };
 
-      filamentos.unshift(fil);
-      localStorage.setItem(FILS_KEY, JSON.stringify(filamentos));
+      await _supabase.from('filamentos').insert([fil]);
       document.getElementById('filamentoForm').reset();
       document.getElementById('imgPreviewFilamento').style.display = 'none';
+      await cargarDatosDesdeNube();
       renderFilamentos();
     }
 
@@ -942,6 +947,7 @@
       const grid = document.getElementById('filamentosGrid');
       grid.innerHTML = '';
       filamentos.forEach(f => {
+        const precio = f.precio_kg || f.precioKg;
         grid.innerHTML += `
           <div class="product-card">
             ${f.foto ? `<img class="product-img" src="${f.foto}">` : ''}
@@ -949,7 +955,7 @@
               <div>
                 <strong>${f.marca}</strong> - ${f.tipo}
                 <div style="color:var(--accent); font-weight:bold; margin-top:4px;">${f.color}</div>
-                <div style="font-size:0.85rem; color:var(--text-muted);">${f.precioKg} €/kg</div>
+                <div style="font-size:0.85rem; color:var(--text-muted);">${precio} €/kg</div>
               </div>
               ${f.url ? `<a href="${f.url}" target="_blank" class="btn btn-secondary" style="margin-top:10px; font-size:0.8rem; padding:6px;">🛒 Comprar</a>` : ''}
             </div>
@@ -960,12 +966,11 @@
 
     function closeModal() { document.getElementById('modalProducto').classList.remove('active'); }
 
-    function borrarProducto(id) {
-      if(confirm('¿Borrar esta pieza del catálogo?')) {
-        productos = productos.filter(p => p.id !== id);
-        localStorage.setItem(PRODS_KEY, JSON.stringify(productos));
+    async function borrarProducto(id) {
+      if(confirm('¿Borrar esta pieza?')) {
+        await _supabase.from('productos').delete().eq('id', id);
         closeModal();
-        renderCatalogo();
+        await cargarDatosDesdeNube();
       }
     }
 
@@ -985,12 +990,12 @@
         gastosFijos: parseFloat(document.getElementById('cfgGastosFijos').value) || 0.00,
         multiplicador: parseFloat(document.getElementById('cfgMultiplicador').value) || 2.0
       };
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+      localStorage.setItem('3d_cfg_v7', JSON.stringify(config));
       alert('Ajustes guardados.');
     }
 
-    // Init
-    cargarCalculadora();
+    // Inicializar
+    cargarDatosDesdeNube();
   </script>
 </body>
 </html>
