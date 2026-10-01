@@ -80,6 +80,7 @@
       background-color: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;
       color: var(--text-main); font-size: 0.95rem; width: 100%;
     }
+    input[type="color"] { padding: 4px; height: 42px; cursor: pointer; }
     input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
     .row { display: flex; gap: 10px; }
     .row .form-group { flex: 1; }
@@ -102,7 +103,7 @@
     .btn-warning { background-color: var(--warning); color: #ffffff; }
     .btn-danger { background-color: var(--danger); color: white; }
 
-    .catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+    .catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
     .product-card {
       background-color: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
       cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; box-shadow: 0 2px 5px rgba(0,0,0,0.03);
@@ -117,6 +118,12 @@
       cursor: pointer; font-size: 0.8rem; font-weight: 600; white-space: nowrap; display: flex; align-items: center; gap: 6px;
     }
     .folder-chip.active { background: var(--accent); color: #ffffff; border-color: var(--accent-hover); }
+
+    .color-swatch-badge {
+      display: inline-flex; align-items: center; gap: 6px; background: var(--card-bg); border: 1px solid var(--border);
+      padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; margin-top: 4px;
+    }
+    .color-circle { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.2); flex-shrink: 0; }
 
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 8px; }
     th, td { padding: 8px; text-align: right; border-bottom: 1px solid var(--border); }
@@ -178,7 +185,7 @@
             <button class="btn btn-secondary" style="flex:1; min-width:140px;" onclick="switchTab('filamentos')">🎨 Nuevo Filamento</button>
           </div>
 
-          <!-- CALCULADORA RÁPIDA DE GRAMOS EN INICIO -->
+          <!-- CALCULADORA RÁPIDA DE GRAMOS -->
           <div style="background: var(--card-bg); border: 1px dashed var(--accent); padding: 12px; border-radius: 10px;">
             <div style="font-weight:700; font-size:0.85rem; color:var(--accent-hover); margin-bottom:8px;">⚖️ Calculadora Rápida: Coste por Gramo</div>
             <div class="row">
@@ -392,19 +399,24 @@
               </div>
               <div class="form-group">
                 <label>Tipo / Formato *</label>
-                <input type="text" id="fTipo" required placeholder="Ej. PLA Basic, Refill">
+                <input type="text" id="fTipo" required placeholder="Ej. PLA Basic, PLA Mate">
               </div>
             </div>
 
             <div class="row">
-              <div class="form-group">
-                <label>Nombre de Color Exacto *</label>
-                <input type="text" id="fColor" required placeholder="Ej. Blanco Huevo, Gris Antracita">
+              <div class="form-group" style="flex: 2;">
+                <label>Nombre de Color *</label>
+                <input type="text" id="fColor" required placeholder="Ej. Ash Grey, Gris Oscuro">
               </div>
-              <div class="form-group">
-                <label>Precio (€/kg)</label>
-                <input type="number" id="fPrecioKg" value="20" step="1" required>
+              <div class="form-group" style="flex: 1;">
+                <label>Tono Visual</label>
+                <input type="color" id="fColorHex" value="#808080" title="Selecciona la muestra exacta de color">
               </div>
+            </div>
+
+            <div class="form-group">
+              <label>Precio (€/kg)</label>
+              <input type="number" id="fPrecioKg" value="20" step="0.5" required>
             </div>
 
             <div class="form-group">
@@ -428,7 +440,7 @@
 
         <div class="card">
           <div class="card-title">Mis Filamentos Registrados</div>
-          <div class="catalog-grid" id="filamentosGrid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));"></div>
+          <div class="catalog-grid" id="filamentosGrid" style="grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));"></div>
         </div>
       </div>
     </div>
@@ -522,7 +534,6 @@
       if (evt && evt.target) {
         evt.target.classList.add('active');
       } else {
-        // Seleccionar botón activo manualmente si se invoca programáticamente
         const btn = Array.from(document.querySelectorAll('.nav-btn')).find(b => b.getAttribute('onclick').includes(tabId));
         if (btn) btn.classList.add('active');
       }
@@ -630,9 +641,11 @@
       filamentos.forEach(f => {
         const checked = selectedIds.includes(f.id) ? 'checked' : '';
         const precio = f.precio_kg || f.precioKg;
+        const colorHex = f.color_hex || '#808080';
         container.innerHTML += `
           <label class="fil-item">
             <input type="checkbox" value="${f.id}" ${checked}>
+            <span class="color-circle" style="background-color:${colorHex};"></span>
             <span><strong>${f.marca}</strong> - ${f.color} (${f.tipo}) - ${precio}€/kg</span>
           </label>
         `;
@@ -643,7 +656,7 @@
       const sel = document.getElementById(selectId);
       sel.innerHTML = '';
       if (empresas.length === 0) {
-        sel.innerHTML = '<option value="">⚠️ Crea primero una carpeta en Empresas</option>';
+        sel.innerHTML = '<option value="">⚠️️ Crea primero una carpeta en Empresas</option>';
         return;
       }
 
@@ -866,7 +879,7 @@
             <span style="font-size:0.8rem; color:var(--text-muted);">${count} piezas</span>
             <div style="margin-top:8px; display:flex; gap:6px; justify-content:center;">
               <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;" onclick="editarEmpresa('${emp.id}')">✏️ Editar</button>
-              <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="eliminarEmpresa('${emp.id}')">🗑️️ Borrar</button>
+              <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="eliminarEmpresa('${emp.id}')">🗑 Borrar</button>
             </div>
           </div>
         `;
@@ -893,6 +906,7 @@
         marca: document.getElementById('fMarca').value,
         tipo: document.getElementById('fTipo').value,
         color: document.getElementById('fColor').value,
+        color_hex: document.getElementById('fColorHex').value,
         precio_kg: parseFloat(document.getElementById('fPrecioKg').value),
         url: document.getElementById('fUrl').value,
         foto: document.getElementById('fFotoBase64').value
@@ -917,6 +931,7 @@
       document.getElementById('fMarca').value = f.marca;
       document.getElementById('fTipo').value = f.tipo;
       document.getElementById('fColor').value = f.color;
+      document.getElementById('fColorHex').value = f.color_hex || '#808080';
       document.getElementById('fPrecioKg').value = f.precio_kg || f.precioKg || 20;
       document.getElementById('fUrl').value = f.url || '';
       document.getElementById('fFotoBase64').value = f.foto || '';
@@ -927,7 +942,7 @@
         img.style.display = 'block';
       }
 
-      document.getElementById('filFormTitle').textContent = '✏️ Editar Filamento';
+      document.getElementById('filFormTitle').textContent = '✏️️ Editar Filamento';
       document.getElementById('btnGuardarFilamento').textContent = 'Guardar Cambios';
       document.getElementById('btnCancelarEditFil').style.display = 'inline-block';
     }
@@ -943,6 +958,7 @@
     function resetFormFilamento() {
       document.getElementById('fFilamentoEditId').value = '';
       document.getElementById('filamentoForm').reset();
+      document.getElementById('fColorHex').value = '#808080';
       document.getElementById('fFotoBase64').value = '';
       document.getElementById('imgPreviewFilamento').style.display = 'none';
       document.getElementById('filFormTitle').textContent = '➕ Registrar Nuevo Filamento';
@@ -955,12 +971,23 @@
       grid.innerHTML = '';
       filamentos.forEach(f => {
         const precio = f.precio_kg || f.precioKg;
+        const colorHex = f.color_hex || '#808080';
+
         grid.innerHTML += `
           <div class="product-card" style="padding:12px;">
-            ${f.foto ? `<img src="${f.foto}" style="width:100%; height:120px; object-fit:cover; border-radius:6px; margin-bottom:8px;">` : ''}
-            <strong>${f.marca} - ${f.color}</strong>
-            <div style="font-size:0.8rem; color:var(--text-muted);">${f.tipo} | ${precio}€/kg</div>
-            <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">
+            ${f.foto ? `<img src="${f.foto}" style="width:100%; height:110px; object-fit:cover; border-radius:6px; margin-bottom:8px;">` : ''}
+            
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+              <strong>${f.marca}</strong>
+              <div class="color-swatch-badge">
+                <span class="color-circle" style="background-color:${colorHex};"></span>
+              </div>
+            </div>
+
+            <div style="font-size:0.85rem; font-weight:600; color:var(--text-main); margin-top:2px;">${f.color}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">${f.tipo} | <strong>${precio}€/kg</strong></div>
+
+            <div style="margin-top:auto; display:flex; gap:6px; flex-wrap:wrap;">
               ${f.url ? `<a href="${f.url}" target="_blank" class="btn" style="padding:4px 8px; font-size:0.75rem; flex:1;">🛒 Comprar</a>` : ''}
               <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;" onclick="editarFilamento('${f.id}')">✏️ Edit</button>
               <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="eliminarFilamento('${f.id}')">🗑️</button>
@@ -1026,9 +1053,13 @@
       let htmlFils = '';
       if(filsAsoc.length > 0) {
         filsAsoc.forEach(f => {
+          const colorHex = f.color_hex || '#808080';
           htmlFils += `
             <div class="fil-badge-item">
-              <span><strong>${f.marca}</strong> - ${f.color} (${f.tipo})</span>
+              <span style="display:flex; align-items:center; gap:6px;">
+                <span class="color-circle" style="background-color:${colorHex};"></span>
+                <strong>${f.marca}</strong> - ${f.color} (${f.tipo})
+              </span>
               ${f.url ? `<a href="${f.url}" target="_blank" class="btn" style="padding:2px 8px; font-size:0.75rem;">🛒 Comprar</a>` : ''}
             </div>
           `;
