@@ -130,7 +130,7 @@
 <body>
 
   <navbar>
-    <div class="brand">⚙️ Gestor 3D Cloud</div>
+    <div class="brand">⚙️️ Gestor 3D Cloud</div>
     <div class="nav-links">
       <button class="nav-btn active" onclick="switchTab('calculadora', event)">🧮 Calculadora</button>
       <button class="nav-btn" onclick="switchTab('catalogo', event)">📦 Piezas</button>
@@ -424,6 +424,8 @@
       try {
         const { data: emps } = await _supabase.from('empresas').select('*').order('created_at', { ascending: false });
         empresas = emps || [];
+        
+        // Carpeta Raíz/General por omisión
         if (!empresas.some(e => e.id === 'emp_general')) {
           empresas.unshift({ id: 'emp_general', nombre: 'General / Sin Carpeta', logo: '', padre_id: null });
         }
@@ -434,7 +436,7 @@
         const { data: prods } = await _supabase.from('productos').select('*').order('created_at', { ascending: false });
         productos = (prods || []).map(p => ({
           ...p,
-          empresaId: p.empresa_id || 'emp_general',
+          empresaId: (p.empresa_id && p.empresa_id !== 'null' && p.empresa_id !== '') ? p.empresa_id : 'emp_general',
           descuentoPct: p.descuento_pct,
           filamentosIds: p.filamentos_ids || [],
           costeTotal: p.coste_total,
@@ -527,7 +529,7 @@
       const sel = document.getElementById(selectId);
       sel.innerHTML = '';
       empresas.forEach(emp => {
-        const isSel = emp.id === selectedId ? 'selected' : '';
+        const isSel = (emp.id === selectedId || (!selectedId && emp.id === 'emp_general')) ? 'selected' : '';
         const prefijo = emp.padre_id ? '↳ ' : '📁 ';
         sel.innerHTML += `<option value="${emp.id}" ${isSel}>${prefijo}${emp.nombre}</option>`;
       });
@@ -609,7 +611,10 @@
       const res = calcular();
       const selFils = obtenerFilamentosSeleccionados('cFilamentosChecklist');
 
-      const empSel = document.getElementById('cEmpresaSel').value || 'emp_general';
+      let empSel = document.getElementById('cEmpresaSel').value;
+      if (!empSel || empSel === '' || empSel === 'null') {
+        empSel = 'emp_general';
+      }
 
       const newId = 'prod_' + Date.now();
       const dbProd = {
