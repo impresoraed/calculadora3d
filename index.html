@@ -131,11 +131,11 @@
   <navbar>
     <div class="brand">⚙️ Gestor 3D Cloud</div>
     <div class="nav-links">
-      <button class="nav-btn active" onclick="switchTab('calculadora')">🧮 Calculadora</button>
-      <button class="nav-btn" onclick="switchTab('catalogo')">📦 Piezas</button>
-      <button class="nav-btn" onclick="switchTab('carpetas')">📁 Empresas</button>
-      <button class="nav-btn" onclick="switchTab('filamentos')">🎨 Filamentos</button>
-      <button class="nav-btn" onclick="switchTab('ajustes')">⚙️ Ajustes</button>
+      <button class="nav-btn active" onclick="switchTab('calculadora', event)">🧮 Calculadora</button>
+      <button class="nav-btn" onclick="switchTab('catalogo', event)">📦 Piezas</button>
+      <button class="nav-btn" onclick="switchTab('carpetas', event)">📁 Empresas</button>
+      <button class="nav-btn" onclick="switchTab('filamentos', event)">🎨 Filamentos</button>
+      <button class="nav-btn" onclick="switchTab('ajustes', event)">⚙️ Ajustes</button>
     </div>
   </navbar>
 
@@ -435,12 +435,14 @@
       }
     }
 
-    function switchTab(tabId) {
+    function switchTab(tabId, evt) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
 
       document.getElementById('tab-' + tabId).classList.add('active');
-      event.target.classList.add('active');
+      if (evt && evt.target) {
+        evt.target.classList.add('active');
+      }
 
       if(tabId === 'calculadora') cargarCalculadora();
       if(tabId === 'catalogo') renderCatalogo();
@@ -698,7 +700,7 @@
                 </div>
               </div>
               <div style="font-size:1.3rem; font-weight:bold; color:var(--success);">
-                ${p.precioVenta.toFixed(2)} € <span style="font-size:0.75rem; color:var(--text-muted);">/ud</span>
+                ${p.precioVenta ? p.precioVenta.toFixed(2) : '0.00'} € <span style="font-size:0.75rem; color:var(--text-muted);">/ud</span>
                 ${p.descuentoPct > 0 ? `<span style="font-size:0.75rem; color:var(--warning);">(-${p.descuentoPct}%)</span>` : ''}
               </div>
             </div>
@@ -716,201 +718,57 @@
       const p = productos.find(x => x.id === id);
       if(!p) return;
 
-      const modal = document.getElementById('modalProducto');
-      const body = document.getElementById('modalContent');
       const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'General' };
+      const modal = document.getElementById('modalProducto');
+      const content = document.getElementById('modalContent');
 
-      let filsListaHTML = '';
-      if(p.filamentosIds && p.filamentosIds.length > 0) {
+      let filsHtml = '';
+      if (p.filamentosIds && p.filamentosIds.length > 0) {
         p.filamentosIds.forEach(fId => {
           const f = filamentos.find(x => x.id === fId);
-          if(f) {
-            filsListaHTML += `
-              <div class="fil-badge-item">
-                <div><strong>${f.marca}</strong> - <span style="color:var(--accent);">${f.color}</span> (${f.tipo})</div>
-                ${f.url ? `<a href="${f.url}" target="_blank" class="btn btn-secondary" style="font-size:0.75rem; padding:4px 10px;">🛒 Comprar</a>` : ''}
-              </div>
-            `;
-          }
+          if(f) filsHtml += `<div class="fil-badge-item"><span><strong>${f.marca}</strong> - ${f.color}</span><span>${f.precio_kg || f.precioKg} €/kg</span></div>`;
         });
       } else {
-        filsListaHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">Ningún filamento específico asociado.</div>';
+        filsHtml = '<span style="color:var(--text-muted); font-size:0.85rem;">Ningún filamento específico asociado</span>';
       }
 
-      body.innerHTML = `
-        <h2 style="color:var(--accent); margin-bottom:6px;">${p.nombre}</h2>
-        <div style="color:var(--text-muted); font-size:0.9rem; margin-bottom:15px;">Empresa: <strong>📁 ${emp.nombre}</strong></div>
-
-        ${p.foto ? `<img src="${p.foto}" style="width:100%; max-height:220px; object-fit:contain; border-radius:8px; margin-bottom:15px; background:var(--bg-dark);">` : ''}
-
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px; background:var(--bg-dark); padding:12px; border-radius:8px; border:1px solid var(--border);">
-          <div>Peso: <strong>${p.peso} g</strong></div>
-          <div>Colores: <strong>${p.colores}</strong></div>
-          <div>Tiempo: <strong>${p.horas}h ${p.minutos}m</strong></div>
-          <div>Precio Venta: <strong style="color:var(--success); font-size:1.1rem;">${p.precioVenta.toFixed(2)} €</strong></div>
+      content.innerHTML = `
+        <h2 style="color:var(--accent); margin-bottom:12px;">${p.nombre}</h2>
+        <div style="display:flex; gap:20px; flex-wrap:wrap;">
+          ${p.foto ? `<img src="${p.foto}" style="max-width:200px; max-height:200px; object-fit:contain; border-radius:8px;">` : ''}
+          <div style="flex:1;">
+            <p><strong>Empresa/Cliente:</strong> ${emp.nombre}</p>
+            <p><strong>Peso:</strong> ${p.peso} g</p>
+            <p><strong>Colores:</strong> ${p.colores}</p>
+            <p><strong>Tiempo Impresión:</strong> ${p.horas}h ${p.minutos}m</p>
+            <p style="margin-top:8px;"><strong>Precio Venta Sugerido:</strong> <span style="color:var(--success); font-weight:bold; font-size:1.2rem;">${p.precioVenta.toFixed(2)} €</span></p>
+            ${p.notas ? `<p style="margin-top:8px; font-style:italic; color:var(--text-muted);">${p.notas}</p>` : ''}
+          </div>
         </div>
-
-        <div style="margin-bottom:15px;">
-          <h4 style="margin-bottom:8px;">Filamentos Asignados:</h4>
-          ${filsListaHTML}
+        <div style="margin-top:16px;">
+          <h4 style="color:var(--text-muted); margin-bottom:6px;">FILAMENTOS ASOCIADOS:</h4>
+          ${filsHtml}
         </div>
-
-        ${p.notas ? `<p style="font-size:0.85rem; background:rgba(255,255,255,0.05); padding:10px; border-radius:6px; margin-bottom:15px;"><strong>Notas:</strong> ${p.notas}</p>` : ''}
-
         <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
-          <button class="btn btn-warning" onclick="abrirFormularioEdicion('${p.id}')">✏️ Editar Pieza</button>
-          <button class="btn btn-danger" onclick="borrarProducto('${p.id}')">🗑 Eliminar</button>
+          <button class="btn btn-danger" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
+          <button class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
         </div>
       `;
       modal.classList.add('active');
     }
 
-    function abrirFormularioEdicion(id) {
-      const p = productos.find(x => x.id === id);
-      if(!p) return;
-
-      const body = document.getElementById('modalContent');
-      body.innerHTML = `
-        <h2 style="color:var(--warning); margin-bottom:15px;">✏️️ Editar Pieza: ${p.nombre}</h2>
-        <form onsubmit="guardarEdicionPieza(event, '${p.id}')">
-          <div class="form-group">
-            <label>Nombre de la Pieza *</label>
-            <input type="text" id="eNombre" value="${p.nombre}" required>
-          </div>
-
-          <div class="form-group">
-            <label>Mover a Carpeta de Empresa</label>
-            <select id="eEmpresaSel"></select>
-          </div>
-
-          <div class="row">
-            <div class="form-group">
-              <label>Peso (gramos)</label>
-              <input type="number" id="ePeso" value="${p.peso}" step="0.1" required>
-            </div>
-            <div class="form-group">
-              <label>Descuento Especial (%)</label>
-              <input type="number" id="eDescuentoPct" value="${p.descuentoPct || 0}" min="0" max="100">
-            </div>
-          </div>
-
-          <div class="row">
-            <div class="form-group">
-              <label>Nº de Colores</label>
-              <select id="eColores">
-                <option value="1" ${p.colores === 1 ? 'selected' : ''}>1 Color</option>
-                <option value="2" ${p.colores === 2 ? 'selected' : ''}>2 Colores (AMS)</option>
-                <option value="3" ${p.colores === 3 ? 'selected' : ''}>3 Colores</option>
-                <option value="4" ${p.colores === 4 ? 'selected' : ''}>4 Colores</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Horas Impresión</label>
-              <input type="number" id="eHoras" value="${p.horas || 0}">
-            </div>
-            <div class="form-group">
-              <label>Minutos Impresión</label>
-              <input type="number" id="eMinutos" value="${p.minutos || 0}">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Cambiar Archivo .3mf o Imagen</label>
-            <input type="file" id="eArch3mf" accept=".3mf, image/*" onchange="procesarEdicionFoto(event)">
-            <input type="hidden" id="eFotoBase64" value="${p.foto || ''}">
-          </div>
-
-          <div class="form-group">
-            <label>Filamentos Asignados</label>
-            <div class="fil-checklist" id="eFilamentosChecklist"></div>
-          </div>
-
-          <div class="form-group">
-            <label>Notas / Observaciones</label>
-            <textarea id="eNotas" rows="2">${p.notas || ''}</textarea>
-          </div>
-
-          <div style="display:flex; gap:10px; margin-top:20px; justify-content:flex-end;">
-            <button type="button" class="btn btn-secondary" onclick="verFicha('${p.id}')">Cancelar</button>
-            <button type="submit" class="btn btn-success">💾 Guardar Cambios</button>
-          </div>
-        </form>
-      `;
-
-      cargarSelectEmpresas('eEmpresaSel', p.empresaId || 'emp_general');
-      renderFilamentosChecklist('eFilamentosChecklist', p.filamentosIds || []);
+    function closeModal() {
+      document.getElementById('modalProducto').classList.remove('active');
     }
 
-    async function procesarEdicionFoto(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      if (file.name.endsWith('.3mf')) {
-        try {
-          const zip = await JSZip.loadAsync(file);
-          const fotoFile = zip.file('Metadata/plate_1.png') || zip.file('Metadata/thumbnail.png');
-          if (fotoFile) {
-            const base64 = await fotoFile.async('base64');
-            document.getElementById('eFotoBase64').value = 'data:image/png;base64,' + base64;
-          }
-        } catch (err) { alert('Error al leer .3mf'); }
-      } else {
-        const reader = new FileReader();
-        reader.onload = function(evt) { document.getElementById('eFotoBase64').value = evt.target.result; };
-        reader.readAsDataURL(file);
-      }
-    }
-
-    async function guardarEdicionPieza(e, id) {
-      e.preventDefault();
-      const peso = parseFloat(document.getElementById('ePeso').value) || 0;
-      const colores = parseInt(document.getElementById('eColores').value) || 1;
-      const horas = parseFloat(document.getElementById('eHoras').value) || 0;
-      const mins = parseFloat(document.getElementById('eMinutos').value) || 0;
-      const descuentoPct = parseFloat(document.getElementById('eDescuentoPct').value) || 0;
-      const selFils = obtenerFilamentosSeleccionados('eFilamentosChecklist');
-
-      let precioKg = config.filamento;
-      if(selFils.length > 0) {
-        let suma = 0;
-        selFils.forEach(fId => {
-          const f = filamentos.find(x => x.id === fId);
-          if(f) suma += parseFloat(f.precio_kg || f.precioKg);
-        });
-        precioKg = suma / selFils.length;
-      }
-
-      const costeMat = (peso / 1000) * precioKg;
-      const costeColor = (colores - 1) * config.extraColor;
-      const costeTiempo = (horas + (mins / 60)) * config.horaMaquina;
-      const costeTotal = costeMat + costeColor + costeTiempo + config.gastosFijos;
-
-      let precioVenta = costeTotal * config.multiplicador;
-      if (descuentoPct > 0) {
-        precioVenta = precioVenta * (1 - (descuentoPct / 100));
-      }
-
-      const dbProd = {
-        nombre: document.getElementById('eNombre').value,
-        empresa_id: document.getElementById('eEmpresaSel').value,
-        peso: peso,
-        colores: colores,
-        horas: horas,
-        minutos: mins,
-        descuento_pct: descuentoPct,
-        foto: document.getElementById('eFotoBase64').value,
-        filamentos_ids: selFils,
-        notas: document.getElementById('eNotas').value,
-        coste_total: costeTotal,
-        precio_venta: precioVenta
-      };
-
-      await _supabase.from('productos').update(dbProd).eq('id', id);
-      await cargarDatosDesdeNube();
-      alert('¡Pieza actualizada en la Nube!');
+    async function eliminarProducto(id) {
+      if(!confirm('¿Seguro que deseas eliminar esta pieza?')) return;
+      await _supabase.from('productos').delete().eq('id', id);
       closeModal();
+      await cargarDatosDesdeNube();
     }
 
+    // GESTIÓN DE FILAMENTOS
     function previewFotoFilamento(e) {
       const file = e.target.files[0];
       if(!file) return;
@@ -926,8 +784,8 @@
 
     async function guardarFilamento(e) {
       e.preventDefault();
-      const fil = {
-        id: 'f_' + Date.now(),
+      const newFil = {
+        id: 'fil_' + Date.now(),
         marca: document.getElementById('fMarca').value,
         tipo: document.getElementById('fTipo').value,
         color: document.getElementById('fColor').value,
@@ -936,7 +794,7 @@
         foto: document.getElementById('fFotoBase64').value
       };
 
-      await _supabase.from('filamentos').insert([fil]);
+      await _supabase.from('filamentos').insert([newFil]);
       document.getElementById('filamentoForm').reset();
       document.getElementById('imgPreviewFilamento').style.display = 'none';
       await cargarDatosDesdeNube();
@@ -949,31 +807,28 @@
       filamentos.forEach(f => {
         const precio = f.precio_kg || f.precioKg;
         grid.innerHTML += `
-          <div class="product-card">
-            ${f.foto ? `<img class="product-img" src="${f.foto}">` : ''}
-            <div class="product-body">
-              <div>
-                <strong>${f.marca}</strong> - ${f.tipo}
-                <div style="color:var(--accent); font-weight:bold; margin-top:4px;">${f.color}</div>
-                <div style="font-size:0.85rem; color:var(--text-muted);">${precio} €/kg</div>
-              </div>
-              ${f.url ? `<a href="${f.url}" target="_blank" class="btn btn-secondary" style="margin-top:10px; font-size:0.8rem; padding:6px;">🛒 Comprar</a>` : ''}
+          <div class="product-card" style="padding:12px;">
+            ${f.foto ? `<img src="${f.foto}" style="height:100px; width:100%; object-fit:cover; border-radius:6px; margin-bottom:8px;">` : ''}
+            <strong>${f.marca}</strong> - ${f.color}
+            <div style="font-size:0.8rem; color:var(--text-muted);">${f.tipo}</div>
+            <div style="color:var(--accent); font-weight:bold; margin-top:4px;">${precio} €/kg</div>
+            <div style="display:flex; justify-content:space-between; margin-top:8px;">
+              ${f.url ? `<a href="${f.url}" target="_blank" class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;">Comprar</a>` : '<div></div>'}
+              <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="eliminarFilamento('${f.id}')">🗑️</button>
             </div>
           </div>
         `;
       });
     }
 
-    function closeModal() { document.getElementById('modalProducto').classList.remove('active'); }
-
-    async function borrarProducto(id) {
-      if(confirm('¿Borrar esta pieza?')) {
-        await _supabase.from('productos').delete().eq('id', id);
-        closeModal();
-        await cargarDatosDesdeNube();
-      }
+    async function eliminarFilamento(id) {
+      if(!confirm('¿Eliminar este filamento?')) return;
+      await _supabase.from('filamentos').delete().eq('id', id);
+      await cargarDatosDesdeNube();
+      renderFilamentos();
     }
 
+    // AJUSTES GLOBALES
     function cargarAjustesInputs() {
       document.getElementById('cfgFilamento').value = config.filamento;
       document.getElementById('cfgHoraMaquina').value = config.horaMaquina;
@@ -983,28 +838,21 @@
     }
 
     function guardarAjustes() {
-      config = {
-        filamento: parseFloat(document.getElementById('cfgFilamento').value) || 20,
-        horaMaquina: parseFloat(document.getElementById('cfgHoraMaquina').value) || 0.20,
-        extraColor: parseFloat(document.getElementById('cfgExtraColor').value) || 0.05,
-        gastosFijos: parseFloat(document.getElementById('cfgGastosFijos').value) || 0.00,
-        multiplicador: parseFloat(document.getElementById('cfgMultiplicador').value) || 2.0
-      };
+      config.filamento = parseFloat(document.getElementById('cfgFilamento').value) || 20;
+      config.horaMaquina = parseFloat(document.getElementById('cfgHoraMaquina').value) || 0.20;
+      config.extraColor = parseFloat(document.getElementById('cfgExtraColor').value) || 0.05;
+      config.gastosFijos = parseFloat(document.getElementById('cfgGastosFijos').value) || 0.00;
+      config.multiplicador = parseFloat(document.getElementById('cfgMultiplicador').value) || 2.0;
+
       localStorage.setItem('3d_cfg_v7', JSON.stringify(config));
-      alert('Ajustes guardados.');
+      alert('¡Ajustes guardados correctamente!');
+      calcular();
     }
 
-    // Inicializar datos
-    cargarDatosDesdeNube();
-  </script>
-
-  <!-- Script para registrar el Service Worker de la PWA -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js')
-        .then(() => console.log('Service Worker registrado correctamente'))
-        .catch((err) => console.log('Error al registrar Service Worker:', err));
-    }
+    // INICIALIZACIÓN
+    window.addEventListener('DOMContentLoaded', () => {
+      cargarDatosDesdeNube();
+    });
   </script>
 </body>
 </html>
