@@ -130,7 +130,7 @@
 <body>
 
   <navbar>
-    <div class="brand">⚙️️ Gestor 3D Cloud</div>
+    <div class="brand">⚙ Gestor 3D Cloud</div>
     <div class="nav-links">
       <button class="nav-btn active" onclick="switchTab('calculadora', event)">🧮 Calculadora</button>
       <button class="nav-btn" onclick="switchTab('catalogo', event)">📦 Piezas</button>
@@ -238,6 +238,25 @@
             </div>
           </div>
 
+          <!-- CALCULADORA RÁPIDA DE GRAMOS -->
+          <div style="background: var(--card-bg); border: 1px dashed var(--accent); padding: 12px; border-radius: 10px; margin-bottom: 15px;">
+            <div style="font-weight:700; font-size:0.85rem; color:var(--accent-hover); margin-bottom:8px;">⚖️ Calculadora Rápida: Coste de Gramo Exacto</div>
+            <div class="row">
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:0.7rem;">Gramos</label>
+                <input type="number" id="calcGramosInput" value="1.5" step="0.1" oninput="calcularCosteGramoRapido()">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:0.7rem;">Precio Bobina (€/kg)</label>
+                <input type="number" id="calcPrecioKgInput" value="16.25" step="0.05" oninput="calcularCosteGramoRapido()">
+              </div>
+            </div>
+            <div style="margin-top:8px; font-size:0.85rem; display:flex; justify-content:space-between; align-items:center;">
+              <span>Coste total de material:</span>
+              <strong style="color:var(--success); font-size:1rem;" id="calcGramoResultado">0.024 € (2.44 cts)</strong>
+            </div>
+          </div>
+
           <div class="card-title">Proyección de Lote Personalizado</div>
           <div class="form-group">
             <label>Cantidad Exacta Solicitada por el Cliente</label>
@@ -288,7 +307,7 @@
             <input type="hidden" id="eEmpresaEditId">
             <div class="form-group">
               <label>Nombre de la Empresa / Cliente *</label>
-              <input type="text" id="eNombreEmpresa" required placeholder="Ej. Atlántico, Gocozi...">
+              <input type="text" id="eNombreEmpresa" required placeholder="Ej. General, Atlántico, Gocozi...">
             </div>
             <div class="form-group">
               <label>Carpeta Padre (Opcional - Para Subcarpeta)</label>
@@ -422,21 +441,22 @@
 
     async function cargarDatosDesdeNube() {
       try {
-        const { data: emps } = await _supabase.from('empresas').select('*').order('created_at', { ascending: false });
+        const { data: emps } = await _supabase.from('empresas').select('*').order('created_at', { ascending: true });
         empresas = emps || [];
-        
-        // Carpeta Raíz/General por omisión
-        if (!empresas.some(e => e.id === 'emp_general')) {
-          empresas.unshift({ id: 'emp_general', nombre: 'General / Sin Carpeta', logo: '', padre_id: null });
-        }
+
+        // Limpiar referencia de emp_general si existiera en la nube
+        await _supabase.from('empresas').delete().eq('id', 'emp_general');
 
         const { data: fils } = await _supabase.from('filamentos').select('*').order('created_at', { ascending: false });
         filamentos = fils || [];
 
         const { data: prods } = await _supabase.from('productos').select('*').order('created_at', { ascending: false });
+        
+        // Asignar piezas a la primera carpeta válida si no tienen carpeta
+        const primeraCarpetaId = empresas.length > 0 ? empresas[0].id : '';
         productos = (prods || []).map(p => ({
           ...p,
-          empresaId: (p.empresa_id && p.empresa_id !== 'null' && p.empresa_id !== '') ? p.empresa_id : 'emp_general',
+          empresaId: (p.empresa_id && p.empresa_id !== 'emp_general' && p.empresa_id !== 'null' && p.empresa_id !== '') ? p.empresa_id : primeraCarpetaId,
           descuentoPct: p.descuento_pct,
           filamentosIds: p.filamentos_ids || [],
           costeTotal: p.coste_total,
@@ -528,8 +548,14 @@
     function cargarSelectEmpresas(selectId, selectedId = '') {
       const sel = document.getElementById(selectId);
       sel.innerHTML = '';
-      empresas.forEach(emp => {
-        const isSel = (emp.id === selectedId || (!selectedId && emp.id === 'emp_general')) ? 'selected' : '';
+      if (empresas.length === 0) {
+        sel.innerHTML = '<option value="">⚠️ Crea primero una carpeta en Empresas</option>';
+        return;
+      }
+
+      empresas.forEach((emp, index) => {
+        // Seleccionar por defecto la especificada o directamente la PRIMERA carpeta real creada por el usuario
+        const isSel = (emp.id === selectedId || (!selectedId && index === 0)) ? 'selected' : '';
         const prefijo = emp.padre_id ? '↳ ' : '📁 ';
         sel.innerHTML += `<option value="${emp.id}" ${isSel}>${prefijo}${emp.nombre}</option>`;
       });
@@ -542,6 +568,16 @@
         document.getElementById('rPrecioBaseKg').textContent = config.filamento;
       }
       calcular();
+      calcularCosteGramoRapido();
+    }
+
+    function calcularCosteGramoRapido() {
+      const g = parseFloat(document.getElementById('calcGramosInput').value) || 0;
+      const precioKg = parseFloat(document.getElementById('calcPrecioKgInput').value) || 0;
+      const costeTotalG = (g / 1000) * precioKg;
+      const cts = costeTotalG * 100;
+
+      document.getElementById('calcGramoResultado').textContent = `${costeTotalG.toFixed(3)} € (${cts.toFixed(2)} cts)`;
     }
 
     function obtenerFilamentosSeleccionados(containerId) {
@@ -608,13 +644,14 @@
       const nombre = document.getElementById('cNombre').value.trim();
       if(!nombre) { alert('Escribe el nombre de la pieza.'); return; }
 
+      const empSel = document.getElementById('cEmpresaSel').value;
+      if (!empSel || empSel === '') {
+        alert('Por favor, crea al menos una carpeta en la sección Empresas para guardar la pieza.');
+        return;
+      }
+
       const res = calcular();
       const selFils = obtenerFilamentosSeleccionados('cFilamentosChecklist');
-
-      let empSel = document.getElementById('cEmpresaSel').value;
-      if (!empSel || empSel === '' || empSel === 'null') {
-        empSel = 'emp_general';
-      }
 
       const newId = 'prod_' + Date.now();
       const dbProd = {
@@ -681,7 +718,7 @@
       document.getElementById('eEmpresaEditId').value = emp.id;
       document.getElementById('eNombreEmpresa').value = emp.nombre;
       document.getElementById('eLogoBase64').value = emp.logo || '';
-      document.getElementById('empFormTitle').textContent = '✏️ Editar Carpeta';
+      document.getElementById('empFormTitle').textContent = '✏️️ Editar Carpeta';
       document.getElementById('btnGuardarEmpresa').textContent = 'Guardar Cambios';
       document.getElementById('btnCancelarEditEmp').style.display = 'inline-block';
 
@@ -696,9 +733,7 @@
     }
 
     async function eliminarEmpresa(id) {
-      if(id === 'emp_general') { alert('No se puede eliminar la carpeta General.'); return; }
-      if(confirm('¿Eliminar esta carpeta? Las piezas asociadas pasarán a la carpeta General.')) {
-        await _supabase.from('productos').update({ empresa_id: 'emp_general' }).eq('empresa_id', id);
+      if(confirm('¿Eliminar esta carpeta?')) {
         await _supabase.from('empresas').delete().eq('id', id);
         await cargarDatosDesdeNube();
         renderEmpresas();
@@ -720,7 +755,7 @@
       const sel = document.getElementById('ePadreSel');
       sel.innerHTML = '<option value="NINGUNA">(Ninguna - Carpeta Principal)</option>';
       empresas.forEach(emp => {
-        if(emp.id !== 'emp_general' && emp.id !== excludeId) {
+        if(emp.id !== excludeId) {
           sel.innerHTML += `<option value="${emp.id}">📁 ${emp.nombre}</option>`;
         }
       });
@@ -730,6 +765,11 @@
       cargarSelectPadresEmpresas();
       const grid = document.getElementById('empresasGrid');
       grid.innerHTML = '';
+      if (empresas.length === 0) {
+        grid.innerHTML = '<p style="color:var(--text-muted); font-size:0.9rem;">No tienes carpetas creadas. ¡Crea una primero!</p>';
+        return;
+      }
+
       empresas.forEach(emp => {
         const count = productos.filter(p => p.empresaId === emp.id).length;
         const padre = empresas.find(e => e.id === emp.padre_id);
@@ -741,12 +781,10 @@
             <strong style="display:block;">${emp.nombre}</strong>
             ${subTexto}
             <span style="font-size:0.8rem; color:var(--text-muted);">${count} piezas</span>
-            ${emp.id !== 'emp_general' ? `
-              <div style="margin-top:8px; display:flex; gap:6px; justify-content:center;">
-                <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;" onclick="editarEmpresa('${emp.id}')">✏️ Editar</button>
-                <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="eliminarEmpresa('${emp.id}')">🗑️ Borrar</button>
-              </div>
-            ` : ''}
+            <div style="margin-top:8px; display:flex; gap:6px; justify-content:center;">
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;" onclick="editarEmpresa('${emp.id}')">✏️ Editar</button>
+              <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="eliminarEmpresa('${emp.id}')">🗑️ Borrar</button>
+            </div>
           </div>
         `;
       });
@@ -866,8 +904,7 @@
 
       grid.innerHTML = '';
       const filtrados = productos.filter(p => {
-        const empIdTarget = p.empresaId || 'emp_general';
-        const coincideEmp = (carpetaFiltroActual === 'TODAS') || (empIdTarget === carpetaFiltroActual);
+        const coincideEmp = (carpetaFiltroActual === 'TODAS') || (p.empresaId === carpetaFiltroActual);
         const coincideTexto = p.nombre.toLowerCase().includes(search) || (p.notas && p.notas.toLowerCase().includes(search));
         return coincideEmp && coincideTexto;
       });
@@ -875,7 +912,7 @@
       const placeholder = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%23cbd5e1" stroke-width="1"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>';
 
       filtrados.forEach(p => {
-        const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'General / Sin Carpeta' };
+        const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'Sin Carpeta' };
         grid.innerHTML += `
           <div class="product-card" onclick="verFicha('${p.id}')">
             <img class="product-img" src="${p.foto || placeholder}">
@@ -900,7 +937,7 @@
       const p = productos.find(x => x.id === id);
       if (!p) return;
 
-      const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'General / Sin Carpeta' };
+      const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'Sin Carpeta' };
       const filsAsoc = filamentos.filter(f => (p.filamentosIds || []).includes(f.id));
 
       let htmlFils = '';
