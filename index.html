@@ -80,7 +80,7 @@
       background-color: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;
       color: var(--text-main); font-size: 0.95rem; width: 100%;
     }
-    input[type="color"] { padding: 4px; height: 42px; cursor: pointer; }
+    input[type="color"] { padding: 2px; height: 40px; cursor: pointer; border-radius: 6px; }
     input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
     .row { display: flex; gap: 10px; }
     .row .form-group { flex: 1; }
@@ -119,11 +119,16 @@
     }
     .folder-chip.active { background: var(--accent); color: #ffffff; border-color: var(--accent-hover); }
 
-    .color-swatch-badge {
-      display: inline-flex; align-items: center; gap: 6px; background: var(--card-bg); border: 1px solid var(--border);
-      padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; margin-top: 4px;
+    /* MUESTRA VISUAL DE COLOR */
+    .color-box-sample {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      border: 1px solid rgba(0,0,0,0.3);
+      display: inline-block;
+      vertical-align: middle;
+      box-shadow: inset 0 0 2px rgba(0,0,0,0.2);
     }
-    .color-circle { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.2); flex-shrink: 0; }
 
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 8px; }
     th, td { padding: 8px; text-align: right; border-bottom: 1px solid var(--border); }
@@ -185,7 +190,6 @@
             <button class="btn btn-secondary" style="flex:1; min-width:140px;" onclick="switchTab('filamentos')">🎨 Nuevo Filamento</button>
           </div>
 
-          <!-- CALCULADORA RÁPIDA DE GRAMOS -->
           <div style="background: var(--card-bg); border: 1px dashed var(--accent); padding: 12px; border-radius: 10px;">
             <div style="font-weight:700; font-size:0.85rem; color:var(--accent-hover); margin-bottom:8px;">⚖️ Calculadora Rápida: Coste por Gramo</div>
             <div class="row">
@@ -406,11 +410,11 @@
             <div class="row">
               <div class="form-group" style="flex: 2;">
                 <label>Nombre de Color *</label>
-                <input type="text" id="fColor" required placeholder="Ej. Ash Grey, Gris Oscuro">
+                <input type="text" id="fColor" required placeholder="Ej. Ash Grey, Gris Oscuro, Rojo...">
               </div>
               <div class="form-group" style="flex: 1;">
-                <label>Tono Visual</label>
-                <input type="color" id="fColorHex" value="#808080" title="Selecciona la muestra exacta de color">
+                <label>Color Visual</label>
+                <input type="color" id="fColorHex" value="#ef4444" title="Elige el tono exacto">
               </div>
             </div>
 
@@ -501,10 +505,15 @@
         const { data: emps } = await _supabase.from('empresas').select('*').order('created_at', { ascending: true });
         empresas = emps || [];
 
-        await _supabase.from('empresas').delete().eq('id', 'emp_general');
-
-        const { data: fils } = await _supabase.from('filamentos').select('*').order('created_at', { ascending: false });
+        const { data: fils, error: errFils } = await _supabase.from('filamentos').select('*').order('created_at', { ascending: false });
         filamentos = fils || [];
+
+        // Recuperar colores de respaldo en local si la nube no guarda la columna color_hex
+        const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
+        filamentos = filamentos.map(f => ({
+          ...f,
+          color_hex: f.color_hex || localColors[f.id] || '#808080'
+        }));
 
         const { data: prods } = await _supabase.from('productos').select('*').order('created_at', { ascending: false });
         
@@ -521,6 +530,7 @@
         renderHome();
         cargarCalculadora();
         renderCatalogo();
+        renderFilamentos();
       } catch (e) {
         console.error("Error al cargar datos:", e);
       }
@@ -640,12 +650,12 @@
 
       filamentos.forEach(f => {
         const checked = selectedIds.includes(f.id) ? 'checked' : '';
-        const precio = f.precio_kg || f.precioKg;
+        const precio = f.precio_kg || f.precioKg || 20;
         const colorHex = f.color_hex || '#808080';
         container.innerHTML += `
           <label class="fil-item">
             <input type="checkbox" value="${f.id}" ${checked}>
-            <span class="color-circle" style="background-color:${colorHex};"></span>
+            <span class="color-box-sample" style="background-color:${colorHex}; width:16px; height:16px;"></span>
             <span><strong>${f.marca}</strong> - ${f.color} (${f.tipo}) - ${precio}€/kg</span>
           </label>
         `;
@@ -656,7 +666,7 @@
       const sel = document.getElementById(selectId);
       sel.innerHTML = '';
       if (empresas.length === 0) {
-        sel.innerHTML = '<option value="">⚠️️ Crea primero una carpeta en Empresas</option>';
+        sel.innerHTML = '<option value="">⚠ Crea primero una carpeta en Empresas</option>';
         return;
       }
 
@@ -902,26 +912,45 @@
     async function guardarFilamento(e) {
       e.preventDefault();
       const editId = document.getElementById('fFilamentoEditId').value;
+      const colorHex = document.getElementById('fColorHex').value || '#808080';
+      const idToSave = editId || ('fil_' + Date.now());
+
       const payload = {
+        id: idToSave,
         marca: document.getElementById('fMarca').value,
         tipo: document.getElementById('fTipo').value,
         color: document.getElementById('fColor').value,
-        color_hex: document.getElementById('fColorHex').value,
-        precio_kg: parseFloat(document.getElementById('fPrecioKg').value),
+        precio_kg: parseFloat(document.getElementById('fPrecioKg').value) || 20,
         url: document.getElementById('fUrl').value,
         foto: document.getElementById('fFotoBase64').value
       };
 
-      if (editId) {
-        await _supabase.from('filamentos').update(payload).eq('id', editId);
-      } else {
-        payload.id = 'fil_' + Date.now();
-        await _supabase.from('filamentos').insert([payload]);
+      // Guardar el color en el almacenamiento local como respaldo asegurado
+      const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
+      localColors[idToSave] = colorHex;
+      localStorage.setItem('3d_fil_colors', JSON.stringify(localColors));
+
+      // Intentar guardar con la columna de color en la base de datos
+      try {
+        const payloadConColor = { ...payload, color_hex: colorHex };
+        if (editId) {
+          const { error } = await _supabase.from('filamentos').update(payloadConColor).eq('id', editId);
+          if (error) await _supabase.from('filamentos').update(payload).eq('id', editId);
+        } else {
+          const { error } = await _supabase.from('filamentos').insert([payloadConColor]);
+          if (error) await _supabase.from('filamentos').insert([payload]);
+        }
+      } catch (err) {
+        if (editId) {
+          await _supabase.from('filamentos').update(payload).eq('id', editId);
+        } else {
+          await _supabase.from('filamentos').insert([payload]);
+        }
       }
 
       resetFormFilamento();
       await cargarDatosDesdeNube();
-      renderFilamentos();
+      alert('¡Filamento guardado con éxito!');
     }
 
     function editarFilamento(id) {
@@ -942,7 +971,7 @@
         img.style.display = 'block';
       }
 
-      document.getElementById('filFormTitle').textContent = '✏️️ Editar Filamento';
+      document.getElementById('filFormTitle').textContent = '✏ Editar Filamento';
       document.getElementById('btnGuardarFilamento').textContent = 'Guardar Cambios';
       document.getElementById('btnCancelarEditFil').style.display = 'inline-block';
     }
@@ -950,15 +979,20 @@
     async function eliminarFilamento(id) {
       if(confirm('¿Deseas borrar este filamento del catálogo?')) {
         await _supabase.from('filamentos').delete().eq('id', id);
+        
+        // Limpiar también del respaldo local
+        const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
+        delete localColors[id];
+        localStorage.setItem('3d_fil_colors', JSON.stringify(localColors));
+
         await cargarDatosDesdeNube();
-        renderFilamentos();
       }
     }
 
     function resetFormFilamento() {
       document.getElementById('fFilamentoEditId').value = '';
       document.getElementById('filamentoForm').reset();
-      document.getElementById('fColorHex').value = '#808080';
+      document.getElementById('fColorHex').value = '#ef4444';
       document.getElementById('fFotoBase64').value = '';
       document.getElementById('imgPreviewFilamento').style.display = 'none';
       document.getElementById('filFormTitle').textContent = '➕ Registrar Nuevo Filamento';
@@ -969,23 +1003,32 @@
     function renderFilamentos() {
       const grid = document.getElementById('filamentosGrid');
       grid.innerHTML = '';
+
+      if (filamentos.length === 0) {
+        grid.innerHTML = '<p style="color:var(--text-muted); font-size:0.9rem;">No tienes ningún filamento registrado aún.</p>';
+        return;
+      }
+
       filamentos.forEach(f => {
-        const precio = f.precio_kg || f.precioKg;
+        const precio = f.precio_kg || f.precioKg || 20;
         const colorHex = f.color_hex || '#808080';
 
         grid.innerHTML += `
           <div class="product-card" style="padding:12px;">
-            ${f.foto ? `<img src="${f.foto}" style="width:100%; height:110px; object-fit:cover; border-radius:6px; margin-bottom:8px;">` : ''}
+            ${f.foto ? `<img src="${f.foto}" style="width:100%; height:100px; object-fit:cover; border-radius:6px; margin-bottom:8px;">` : ''}
             
-            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-              <strong>${f.marca}</strong>
-              <div class="color-swatch-badge">
-                <span class="color-circle" style="background-color:${colorHex};"></span>
-              </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <strong style="font-size:0.95rem;">${f.marca}</strong>
+              <span class="color-box-sample" style="background-color:${colorHex};" title="Color: ${colorHex}"></span>
             </div>
 
-            <div style="font-size:0.85rem; font-weight:600; color:var(--text-main); margin-top:2px;">${f.color}</div>
-            <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">${f.tipo} | <strong>${precio}€/kg</strong></div>
+            <div style="font-size:0.85rem; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:6px;">
+              ${f.color}
+            </div>
+
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px; margin-bottom:10px;">
+              ${f.tipo} | <strong>${precio}€/kg</strong>
+            </div>
 
             <div style="margin-top:auto; display:flex; gap:6px; flex-wrap:wrap;">
               ${f.url ? `<a href="${f.url}" target="_blank" class="btn" style="padding:4px 8px; font-size:0.75rem; flex:1;">🛒 Comprar</a>` : ''}
@@ -1057,7 +1100,7 @@
           htmlFils += `
             <div class="fil-badge-item">
               <span style="display:flex; align-items:center; gap:6px;">
-                <span class="color-circle" style="background-color:${colorHex};"></span>
+                <span class="color-box-sample" style="background-color:${colorHex}; width:16px; height:16px;"></span>
                 <strong>${f.marca}</strong> - ${f.color} (${f.tipo})
               </span>
               ${f.url ? `<a href="${f.url}" target="_blank" class="btn" style="padding:2px 8px; font-size:0.75rem;">🛒 Comprar</a>` : ''}
