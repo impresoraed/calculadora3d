@@ -3,423 +3,1202 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Calculadora de Impresión 3D y Gestión de Piezas</title>
+  <title>3DPrintGo - Gestor & Calculadora 3D</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#059669">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
-      --bg-color: #f4f6f8;
-      --card-bg: #ffffff;
-      --text-color: #333333;
-      --accent-color: #2563eb;
-      --accent-hover: #1d4ed8;
-      --border-color: #e5e7eb;
-      --danger-color: #ef4444;
-      --success-color: #10b981;
+      --bg-dark: #f8fafc;
+      --panel-bg: #ffffff;
+      --card-bg: #f1f5f9;
+      --accent: #10b981;
+      --accent-hover: #059669;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border: #cbd5e1;
+      --success: #059669;
+      --warning: #d97706;
+      --danger: #dc2626;
     }
 
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      margin: 0;
-      padding: 20px;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    body { background-color: var(--bg-dark); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
 
-    .container {
-      max-width: 1000px;
-      margin: 0 auto;
-    }
-
-    .tabs {
+    navbar {
+      background-color: var(--panel-bg);
+      border-bottom: 2px solid var(--border);
+      padding: 12px 20px;
       display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-      border-bottom: 2px solid var(--border-color);
-      padding-bottom: 10px;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      flex-wrap: wrap;
     }
 
-    .tab-btn {
-      padding: 10px 20px;
-      border: none;
-      background: none;
-      font-size: 16px;
-      font-weight: 600;
-      color: #6b7280;
-      cursor: pointer;
-      border-radius: 6px;
-      transition: all 0.2s;
+    .brand { font-size: 1.3rem; font-weight: 900; color: var(--accent-hover); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+
+    .nav-links {
+      display: flex; gap: 6px; flex: 1; max-width: 950px; justify-content: flex-end; flex-wrap: wrap;
     }
 
-    .tab-btn.active {
-      background-color: var(--accent-color);
-      color: white;
+    .nav-btn {
+      min-width: 85px; background-color: var(--card-bg); border: 1px solid var(--border);
+      color: var(--text-main); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 700;
+      text-align: center; transition: all 0.2s;
     }
 
-    .tab-content {
-      display: none;
+    .nav-btn:hover, .nav-btn.active {
+      background-color: var(--accent); color: #ffffff; border-color: var(--accent-hover);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
     }
 
-    .tab-content.active {
-      display: block;
+    main { flex: 1; padding: 16px; max-width: 1200px; margin: 0 auto; width: 100%; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    @media (min-width: 850px) { .grid-2 { grid-template-columns: 1.1fr 0.9fr; } }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .kpi-card { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
+    .kpi-val { font-size: 1.5rem; font-weight: 800; color: var(--accent-hover); margin-top: 4px; }
+    .kpi-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+
+    .card { background-color: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.03); }
+    .card-title {
+      font-size: 1.1rem; color: var(--accent-hover); font-weight: 700; border-bottom: 1px solid var(--border);
+      padding-bottom: 10px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;
     }
 
-    .card {
-      background-color: var(--card-bg);
-      border-radius: 8px;
-      padding: 20px;
-      margin-bottom: 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-
-    .form-group {
-      margin-bottom: 15px;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: 500;
-    }
-
+    .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+    label { font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
     input, select, textarea {
-      width: 100%;
-      padding: 8px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      box-sizing: border-box;
+      background-color: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;
+      color: var(--text-main); font-size: 0.95rem; width: 100%;
     }
+    input[type="color"] { padding: 2px; height: 40px; cursor: pointer; border-radius: 6px; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
+    .row { display: flex; gap: 10px; }
+    .row .form-group { flex: 1; }
 
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 15px;
+    .fil-checklist {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px; max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
     }
+    .fil-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; }
+    .fil-item input[type="checkbox"] { width: auto; cursor: pointer; }
 
     .btn {
-      padding: 10px 15px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: background 0.2s;
+      background-color: var(--accent); color: #ffffff; border: none; padding: 10px 16px; border-radius: 8px;
+      font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; display: inline-flex;
+      align-items: center; justify-content: center; gap: 8px; text-decoration: none;
+    }
+    .btn:hover { background-color: var(--accent-hover); color: white; }
+    .btn-success { background-color: var(--success); color: #ffffff; }
+    .btn-secondary { background-color: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); }
+    .btn-warning { background-color: var(--warning); color: #ffffff; }
+    .btn-danger { background-color: var(--danger); color: white; }
+
+    .catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+    .product-card {
+      background-color: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+      cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    }
+    .product-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16,185,129,0.15); }
+    .product-img { width: 100%; height: 160px; object-fit: cover; background: var(--card-bg); border-bottom: 1px solid var(--border); }
+    .product-body { padding: 12px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+
+    .folder-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; }
+    .folder-chip {
+      background: var(--card-bg); border: 1px solid var(--border); padding: 6px 14px; border-radius: 20px;
+      cursor: pointer; font-size: 0.8rem; font-weight: 600; white-space: nowrap; display: flex; align-items: center; gap: 6px;
+    }
+    .folder-chip.active { background: var(--accent); color: #ffffff; border-color: var(--accent-hover); }
+
+    /* MUESTRA VISUAL DE COLOR */
+    .color-box-sample {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      border: 1px solid rgba(0,0,0,0.3);
+      display: inline-block;
+      vertical-align: middle;
+      box-shadow: inset 0 0 2px rgba(0,0,0,0.2);
     }
 
-    .btn-primary {
-      background-color: var(--accent-color);
-      color: white;
-    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 8px; }
+    th, td { padding: 8px; text-align: right; border-bottom: 1px solid var(--border); }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.7rem; }
 
-    .btn-primary:hover {
-      background-color: var(--accent-hover);
-    }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(2px); align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+    .modal.active { display: flex; }
+    .modal-body { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 700px; max-height: 90vh; overflow-y: auto; padding: 20px; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+    .close-modal { position: absolute; top: 12px; right: 16px; font-size: 1.8rem; cursor: pointer; color: var(--text-muted); }
 
-    .btn-danger {
-      background-color: var(--danger-color);
-      color: white;
-    }
-
-    .extra-item {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 8px;
-      align-items: center;
-    }
-
-    .checklist-filamentos {
-      max-height: 150px;
-      overflow-y: auto;
-      border: 1px solid var(--border-color);
-      padding: 10px;
-      border-radius: 6px;
-    }
-
-    .catalogo-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-      gap: 20px;
-    }
-
-    .pieza-card {
-      background: white;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      overflow: hidden;
-      padding: 15px;
-    }
-
-    .pieza-img {
-      width: 100%;
-      height: 150px;
-      object-fit: cover;
-      border-radius: 6px;
-      background-color: #eee;
+    .fil-badge-item {
+      display: flex; justify-content: space-between; align-items: center; background: var(--card-bg);
+      border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 0.85rem;
     }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('calculadora')">Calculadora</button>
-    <button class="tab-btn" onclick="switchTab('catalogo')">Piezas Guardadas</button>
-  </div>
+  <navbar>
+    <div class="brand">🚀 3DPrintGo</div>
+    <div class="nav-links">
+      <button class="nav-btn active" onclick="switchTab('inicio', event)">🏠 Inicio</button>
+      <button class="nav-btn" onclick="switchTab('calculadora', event)">🧮 Calculadora</button>
+      <button class="nav-btn" onclick="switchTab('catalogo', event)">📦 Piezas</button>
+      <button class="nav-btn" onclick="switchTab('carpetas', event)">📁 Empresas</button>
+      <button class="nav-btn" onclick="switchTab('filamentos', event)">🎨 Filamentos</button>
+      <button class="nav-btn" onclick="switchTab('ajustes', event)">⚙️ Ajustes</button>
+    </div>
+  </navbar>
 
-  <!-- PESTAÑA CALCULADORA -->
-  <div id="tab-calculadora" class="tab-content active">
-    <div class="card">
-      <h2>Datos de la Pieza</h2>
-      
-      <div class="form-group">
-        <label for="cNombre">Nombre de la pieza</label>
-        <input type="text" id="cNombre" placeholder="Ej: Soporte de Auriculares">
-      </div>
-
-      <div class="form-group">
-        <label for="cEmpresaSel">Carpeta / Empresa</label>
-        <select id="cEmpresaSel">
-          <option value="general">General</option>
-        </select>
+  <main>
+    <!-- TAB: INICIO -->
+    <div id="tab-inicio" class="tab-content active">
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Piezas Creadas</div>
+          <div class="kpi-val" id="kpiTotalPiezas">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Empresas / Carpetas</div>
+          <div class="kpi-val" id="kpiTotalEmpresas">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Filamentos Stock</div>
+          <div class="kpi-val" id="kpiTotalFilamentos">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Valor Catálogo</div>
+          <div class="kpi-val" id="kpiValorCatalogo">0.00 €</div>
+        </div>
       </div>
 
       <div class="grid-2">
-        <div class="form-group">
-          <label for="cPeso">Gramos consumidos (g)</label>
-          <input type="number" id="cPeso" value="100" oninput="calcular()">
+        <div class="card">
+          <div class="card-title">Acceso Rápido</div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
+            <button class="btn btn-success" style="flex:1; min-width:140px;" onclick="switchTab('calculadora')">🧮 Nueva Pieza</button>
+            <button class="btn btn-secondary" style="flex:1; min-width:140px;" onclick="switchTab('filamentos')">🎨 Nuevo Filamento</button>
+          </div>
+
+          <div style="background: var(--card-bg); border: 1px dashed var(--accent); padding: 12px; border-radius: 10px;">
+            <div style="font-weight:700; font-size:0.85rem; color:var(--accent-hover); margin-bottom:8px;">⚖️ Calculadora Rápida: Coste por Gramo</div>
+            <div class="row">
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:0.7rem;">Gramos</label>
+                <input type="number" id="homeGramosInput" value="1.5" step="0.1" oninput="calcularGramoHome()">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:0.7rem;">Precio Bobina (€/kg)</label>
+                <input type="number" id="homePrecioKgInput" value="16.25" step="0.05" oninput="calcularGramoHome()">
+              </div>
+            </div>
+            <div style="margin-top:8px; font-size:0.85rem; display:flex; justify-content:space-between; align-items:center;">
+              <span>Coste total material:</span>
+              <strong style="color:var(--success); font-size:1rem;" id="homeGramoResultado">0.024 € (2.44 cts)</strong>
+            </div>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="cColores">Número de colores</label>
-          <input type="number" id="cColores" value="1" min="1" oninput="calcular()">
+
+        <div class="card">
+          <div class="card-title">Últimas Piezas Guardadas</div>
+          <div id="homeRecentGrid" class="catalog-grid" style="grid-template-columns: 1fr;"></div>
         </div>
       </div>
+    </div>
 
+    <!-- TAB: CALCULADORA -->
+    <div id="tab-calculadora" class="tab-content">
       <div class="grid-2">
+        <div class="card">
+          <div class="card-title">1. Datos de la Pieza</div>
+
+          <div class="form-group">
+            <label>Nombre / Referencia de la pieza</label>
+            <input type="text" id="cNombre" value="Tapón Colgador G" placeholder="Ej. Tapón, Pasacables...">
+          </div>
+
+          <div class="form-group">
+            <label>Carpeta de Empresa / Cliente</label>
+            <select id="cEmpresaSel"></select>
+          </div>
+
+          <div class="form-group">
+            <label>Cargar Archivo Bambu Studio (.3mf) o Imagen</label>
+            <input type="file" id="cArch3mf" accept=".3mf, image/*" onchange="procesarArchivo3MF(event)">
+            <input type="hidden" id="cFotoBase64">
+            <div id="status3mf" style="font-size:0.8rem; color:var(--success); margin-top:4px;"></div>
+            <img id="imgPreview" style="max-height: 120px; object-fit: contain; margin-top: 8px; display: none; border-radius: 6px;">
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Peso (gramos)</label>
+              <input type="number" id="cPeso" value="1.5" step="0.1" min="0.1" oninput="calcular()">
+            </div>
+            <div class="form-group">
+              <label>Nº de Colores</label>
+              <select id="cColores" onchange="calcular()">
+                <option value="1">1 Color</option>
+                <option value="2">2 Colores (AMS)</option>
+                <option value="3">3 Colores</option>
+                <option value="4">4 Colores</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Horas Impresión</label>
+              <input type="number" id="cHoras" value="0" min="0" oninput="calcular()">
+            </div>
+            <div class="form-group">
+              <label>Minutos Impresión</label>
+              <input type="number" id="cMinutos" value="3" min="0" max="59" oninput="calcular()">
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Descuento Especial (%)</label>
+              <input type="number" id="cDescuentoPct" value="0" min="0" max="100" step="1" oninput="calcular()" placeholder="Ej. 5%">
+            </div>
+            <div class="form-group">
+              <label>Fijar Precio Manual (€)</label>
+              <input type="number" id="cPrecioManual" step="0.01" oninput="calcular()" placeholder="Opcional (Ej. 0.10)">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Filamento(s) Utilizado(s)</label>
+            <div class="fil-checklist" id="cFilamentosChecklist"></div>
+          </div>
+
+          <div class="form-group">
+            <label>Notas / Observaciones</label>
+            <textarea id="cNotas" rows="2" placeholder="Detalles de acabado, relleno, etc."></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">2. Desglose & Lote Personalizado</div>
+
+          <div style="background: var(--card-bg); border: 1px solid var(--border); padding: 14px; border-radius: 10px; margin-bottom: 15px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Coste Material (Base <span id="rPrecioBaseKg">20</span>€/kg):</span> <strong id="rMat">0.030 €</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Suplemento Color Extra:</span> <strong id="rColor">0.000 €</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Tiempo Máquina:</span> <strong id="rTiempo">0.000 €</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Gastos Fijos:</span> <strong id="rGastosFijos">0.000 €</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px; color:var(--warning);" id="rRowDesc">
+              <span>Descuento Aplicado:</span> <strong id="rDescVal">0 %</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:1.2rem; color:var(--success); border-top:1px solid var(--border); padding-top:8px;">
+              <span>Precio Final Unitario:</span> <strong id="rPrecioUnitario">0.10 €</strong>
+            </div>
+          </div>
+
+          <div class="card-title">Proyección de Lote Personalizado</div>
+          <div class="form-group">
+            <label>Cantidad Exacta Solicitada por el Cliente</label>
+            <input type="number" id="cLoteCustom" value="3500" step="100" oninput="calcular()">
+          </div>
+
+          <div style="background:var(--card-bg); border:1px solid var(--border); padding:12px; border-radius:8px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">PRECIO TOTAL LOTE</div>
+              <strong style="font-size:1.1rem; color:var(--accent-hover);" id="rLoteCustomTotal">350.00 €</strong>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:0.75rem; color:var(--text-muted);">BENEFICIO NETO</div>
+              <strong style="font-size:1.1rem; color:var(--success);" id="rLoteCustomBeneficio">+210.00 €</strong>
+            </div>
+          </div>
+
+          <div class="card-title">Escalado Estándar</div>
+          <table>
+            <thead>
+              <tr><th>Lote</th><th>Total Venta</th><th>Beneficio Neto</th></tr>
+            </thead>
+            <tbody id="tablaLotes"></tbody>
+          </table>
+
+          <button class="btn btn-success" style="width: 100%; margin-top: 16px;" onclick="guardarEnCatalogo()">
+            💾 Guardar esta Pieza en la Nube
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: PIEZAS / CATÁLOGO -->
+    <div id="tab-catalogo" class="tab-content">
+      <div class="card">
+        <input type="text" id="catSearch" placeholder="🔍 Buscar pieza..." oninput="renderCatalogo()">
+        <div class="folder-bar" id="folderBar" style="margin-top:10px;"></div>
+      </div>
+      <div class="catalog-grid" id="catalogGrid"></div>
+    </div>
+
+    <!-- TAB: EMPRESAS / CARPETAS -->
+    <div id="tab-carpetas" class="tab-content">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span id="empFormTitle">➕ Crear Carpeta de Empresa</span></div>
+          <form id="empresaForm" onsubmit="guardarEmpresa(event)">
+            <input type="hidden" id="eEmpresaEditId">
+            <div class="form-group">
+              <label>Nombre de la Empresa / Cliente *</label>
+              <input type="text" id="eNombreEmpresa" required placeholder="Ej. General, Atlántico, Gocozi...">
+            </div>
+            <div class="form-group">
+              <label>Carpeta Padre (Opcional - Para Subcarpeta)</label>
+              <select id="ePadreSel"></select>
+            </div>
+            <div class="form-group">
+              <label>Logo de la Empresa (Opcional)</label>
+              <input type="file" id="eLogoEmpresa" accept="image/*" onchange="previewLogoEmpresa(event)">
+              <input type="hidden" id="eLogoBase64">
+              <img id="imgPreviewLogo" style="max-height: 80px; object-fit: contain; margin-top: 8px; display: none; border-radius: 6px;">
+            </div>
+            <div style="display:flex; gap:10px;">
+              <button type="submit" class="btn" style="flex:1;" id="btnGuardarEmpresa">Crear Carpeta</button>
+              <button type="button" class="btn btn-secondary" id="btnCancelarEditEmp" style="display:none;" onclick="resetFormEmpresa()">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Carpetas Registradas</div>
+          <div id="empresasGrid" class="catalog-grid" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: CATÁLOGO DE FILAMENTOS -->
+    <div id="tab-filamentos" class="tab-content">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span id="filFormTitle">➕ Registrar Nuevo Filamento</span></div>
+          <form id="filamentoForm" onsubmit="guardarFilamento(event)">
+            <input type="hidden" id="fFilamentoEditId">
+            <div class="row">
+              <div class="form-group">
+                <label>Marca *</label>
+                <input type="text" id="fMarca" required placeholder="Ej. Bambu Lab, eSUN">
+              </div>
+              <div class="form-group">
+                <label>Tipo / Formato *</label>
+                <input type="text" id="fTipo" required placeholder="Ej. PLA Basic, PLA Mate">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="form-group" style="flex: 2;">
+                <label>Nombre de Color *</label>
+                <input type="text" id="fColor" required placeholder="Ej. Ash Grey, Gris Oscuro, Rojo...">
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label>Color Visual</label>
+                <input type="color" id="fColorHex" value="#ef4444" title="Elige el tono exacto">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Precio (€/kg)</label>
+              <input type="number" id="fPrecioKg" value="20" step="0.5" required>
+            </div>
+
+            <div class="form-group">
+              <label>Enlace de Compra Web (URL)</label>
+              <input type="url" id="fUrl" placeholder="https://tienda.com/filamento...">
+            </div>
+
+            <div class="form-group">
+              <label>Foto de la Etiqueta / Bobina</label>
+              <input type="file" id="fFoto" accept="image/*" onchange="previewFotoFilamento(event)">
+              <input type="hidden" id="fFotoBase64">
+              <img id="imgPreviewFilamento" style="max-height: 100px; object-fit: contain; margin-top: 8px; display: none; border-radius: 6px;">
+            </div>
+
+            <div style="display:flex; gap:10px;">
+              <button type="submit" class="btn" style="flex:1;" id="btnGuardarFilamento">Guardar Filamento</button>
+              <button type="button" class="btn btn-secondary" id="btnCancelarEditFil" style="display:none;" onclick="resetFormFilamento()">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Mis Filamentos Registrados</div>
+          <div class="catalog-grid" id="filamentosGrid" style="grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: AJUSTES -->
+    <div id="tab-ajustes" class="tab-content">
+      <div class="card" style="max-width: 600px; margin: 0 auto;">
+        <div class="card-title">Configuración Global de Costes</div>
         <div class="form-group">
-          <label for="cHoras">Horas de impresión</label>
-          <input type="number" id="cHoras" value="2" oninput="calcular()">
+          <label>Precio Filamento Base Predeterminado (€/kg)</label>
+          <input type="number" id="cfgFilamento" step="1">
         </div>
         <div class="form-group">
-          <label for="cMinutos">Minutos de impresión</label>
-          <input type="number" id="cMinutos" value="30" oninput="calcular()">
+          <label>Coste Hora Máquina (€/hora)</label>
+          <input type="number" id="cfgHoraMaquina" step="0.05">
         </div>
-      </div>
-
-      <div class="form-group">
-        <label>Filamentos Utilizados</label>
-        <div id="cFilamentosChecklist" class="checklist-filamentos">
-          <!-- Carga dinámica -->
+        <div class="form-group">
+          <label>Suplemento Fijo Cambio Color Extra (€)</label>
+          <input type="number" id="cfgExtraColor" step="0.01">
         </div>
+        <div class="form-group">
+          <label>Gastos Fijos Estimados por Pieza (€)</label>
+          <input type="number" id="cfgGastosFijos" step="0.005">
+        </div>
+        <div class="form-group">
+          <label>Multiplicador de Margen (Ej. 2.0x ó 2.5x)</label>
+          <input type="number" id="cfgMultiplicador" step="0.1">
+        </div>
+        <button class="btn" onclick="guardarAjustes()">Guardar Ajustes</button>
       </div>
+    </div>
+  </main>
 
-      <div class="form-group">
-        <label>Componentes Extra (Tornillos, imanes, etc.)</label>
-        <div id="extrasContainer"></div>
-        <button type="button" class="btn" onclick="addExtraRow()" style="margin-top: 5px; background: #e5e7eb;">+ Añadir Componente</button>
-      </div>
-
-      <div class="form-group">
-        <label for="cFotoInput">Archivo / Imagen (.3MF o Imagen Base64)</label>
-        <input type="file" id="cFotoInput" onchange="convertirFotoBase64()">
-        <input type="hidden" id="cFotoBase64">
-      </div>
-
-      <div class="form-group">
-        <label for="cNotas">Notas adicionales</label>
-        <textarea id="cNotas" rows="2"></textarea>
-      </div>
-
-      <div class="card" style="background-color: #f8fafc; border: 1px solid #cbd5e1;">
-        <h3>Resumen de Costes</h3>
-        <p>Coste Estimado Total: <strong><span id="resCosteTotal">0.00</span> €</strong></p>
-        <p>Precio Recom. Venta: <strong><span id="resPrecioVenta">0.00</span> €</strong></p>
-      </div>
-
-      <button class="btn btn-primary" onclick="guardarEnCatalogo()" style="width: 100%; font-size: 18px; padding: 12px;">Guardar Pieza en la Nube</button>
+  <!-- MODAL PRODUCTO -->
+  <div class="modal" id="modalProducto">
+    <div class="modal-body">
+      <span class="close-modal" onclick="closeModal()">&times;</span>
+      <div id="modalContent"></div>
     </div>
   </div>
 
-  <!-- PESTAÑA CATÁLOGO -->
-  <div id="tab-catalogo" class="tab-content">
-    <div class="card">
-      <h2>Catálogo de Piezas Guardadas</h2>
-      <div id="catalogoGrid" class="catalogo-grid">
-        <!-- Carga dinámica de piezas -->
-      </div>
-    </div>
-  </div>
-</div>
+  <script>
+    const SUPABASE_URL = 'https://sdpvbkzwtvmnvugjdtyu.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_Bznesuy1Ygz2cwmW_LcTsQ_n52wHT1O';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-<script>
-  // CONFIGURACIÓN SUPABASE
-  const SUPABASE_URL = "TU_SUPABASE_URL";
-  const SUPABASE_KEY = "TU_SUPABASE_ANON_KEY";
-  const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const defaultConfig = { filamento: 20, horaMaquina: 0.20, extraColor: 0.05, gastosFijos: 0.00, multiplicador: 2.0 };
+    let config = JSON.parse(localStorage.getItem('3d_cfg_v7')) || defaultConfig;
 
-  let productosLocales = [];
+    let productos = [];
+    let filamentos = [];
+    let empresas = [];
 
-  function switchTab(tabId) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-    
-    document.getElementById('tab-' + tabId).classList.add('active');
-    event.target.classList.add('active');
+    let carpetaFiltroActual = 'TODAS';
 
-    if(tabId === 'catalogo') {
-      renderCatalogo();
+    async function cargarDatosDesdeNube() {
+      try {
+        const { data: emps } = await _supabase.from('empresas').select('*').order('created_at', { ascending: true });
+        empresas = emps || [];
+
+        const { data: fils, error: errFils } = await _supabase.from('filamentos').select('*').order('created_at', { ascending: false });
+        filamentos = fils || [];
+
+        // Recuperar colores de respaldo en local si la nube no guarda la columna color_hex
+        const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
+        filamentos = filamentos.map(f => ({
+          ...f,
+          color_hex: f.color_hex || localColors[f.id] || '#808080'
+        }));
+
+        const { data: prods } = await _supabase.from('productos').select('*').order('created_at', { ascending: false });
+        
+        const primeraCarpetaId = empresas.length > 0 ? empresas[0].id : '';
+        productos = (prods || []).map(p => ({
+          ...p,
+          empresaId: (p.empresa_id && p.empresa_id !== 'emp_general' && p.empresa_id !== 'null' && p.empresa_id !== '') ? p.empresa_id : primeraCarpetaId,
+          descuentoPct: p.descuento_pct,
+          filamentosIds: p.filamentos_ids || [],
+          costeTotal: p.coste_total,
+          precioVenta: p.precio_venta
+        }));
+
+        renderHome();
+        cargarCalculadora();
+        renderCatalogo();
+        renderFilamentos();
+      } catch (e) {
+        console.error("Error al cargar datos:", e);
+      }
     }
-  }
 
-  function addExtraRow(nombre = '', precio = '') {
-    const container = document.getElementById('extrasContainer');
-    const div = document.createElement('div');
-    div.className = 'extra-item';
-    div.innerHTML = `
-      <input type="text" placeholder="Concepto (ej: Tornillo M3)" value="${nombre}" class="extra-nombre" oninput="calcular()">
-      <input type="number" placeholder="Precio (€)" value="${precio}" step="0.01" class="extra-precio" style="width: 100px;" oninput="calcular()">
-      <button type="button" class="btn btn-danger" onclick="this.parentElement.remove(); calcular();">X</button>
-    `;
-    container.appendChild(div);
-  }
+    function switchTab(tabId, evt) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
 
-  function obtenerFilamentosSeleccionados(containerId) {
-    const checkboxes = document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`);
-    return Array.from(checkboxes).map(cb => cb.value);
-  }
+      document.getElementById('tab-' + tabId).classList.add('active');
+      if (evt && evt.target) {
+        evt.target.classList.add('active');
+      } else {
+        const btn = Array.from(document.querySelectorAll('.nav-btn')).find(b => b.getAttribute('onclick').includes(tabId));
+        if (btn) btn.classList.add('active');
+      }
 
-  function convertirFotoBase64() {
-    const file = document.getElementById('cFotoInput').files[0];
-    if (file) {
+      if(tabId === 'inicio') renderHome();
+      if(tabId === 'calculadora') cargarCalculadora();
+      if(tabId === 'catalogo') renderCatalogo();
+      if(tabId === 'carpetas') renderEmpresas();
+      if(tabId === 'filamentos') renderFilamentos();
+      if(tabId === 'ajustes') cargarAjustesInputs();
+    }
+
+    function renderHome() {
+      document.getElementById('kpiTotalPiezas').textContent = productos.length;
+      document.getElementById('kpiTotalEmpresas').textContent = empresas.length;
+      document.getElementById('kpiTotalFilamentos').textContent = filamentos.length;
+
+      const totalVal = productos.reduce((sum, p) => sum + (p.precioVenta || 0), 0);
+      document.getElementById('kpiValorCatalogo').textContent = totalVal.toFixed(2) + ' €';
+
+      calcularGramoHome();
+
+      const recentGrid = document.getElementById('homeRecentGrid');
+      recentGrid.innerHTML = '';
+      const ultimos = productos.slice(0, 3);
+
+      if (ultimos.length === 0) {
+        recentGrid.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">No hay piezas registradas aún.</p>';
+        return;
+      }
+
+      ultimos.forEach(p => {
+        const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'Sin Carpeta' };
+        recentGrid.innerHTML += `
+          <div class="product-card" style="flex-direction:row; height:80px;" onclick="verFicha('${p.id}')">
+            ${p.foto ? `<img src="${p.foto}" style="width:80px; height:80px; object-fit:cover;">` : ''}
+            <div style="padding:10px; flex:1; display:flex; flex-direction:column; justify-content:center;">
+              <strong style="font-size:0.95rem;">${p.nombre}</strong>
+              <span style="font-size:0.75rem; color:var(--text-muted);">📁 ${emp.nombre}</span>
+            </div>
+            <div style="padding:10px; display:flex; align-items:center;">
+              <strong style="color:var(--success); font-size:1rem;">${p.precioVenta.toFixed(2)} €</strong>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function calcularGramoHome() {
+      const g = parseFloat(document.getElementById('homeGramosInput').value) || 0;
+      const precioKg = parseFloat(document.getElementById('homePrecioKgInput').value) || 0;
+      const costeTotalG = (g / 1000) * precioKg;
+      const cts = costeTotalG * 100;
+
+      document.getElementById('homeGramoResultado').textContent = `${costeTotalG.toFixed(3)} € (${cts.toFixed(2)} cts)`;
+    }
+
+    async function procesarArchivo3MF(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const status = document.getElementById('status3mf');
+      if (file.name.endsWith('.3mf')) {
+        status.textContent = 'Procesando .3mf...';
+        try {
+          const zip = await JSZip.loadAsync(file);
+          const fotoFile = zip.file('Metadata/plate_1.png') || zip.file('Metadata/thumbnail.png');
+
+          if (fotoFile) {
+            const base64 = await fotoFile.async('base64');
+            const dataUrl = 'data:image/png;base64,' + base64;
+            document.getElementById('cFotoBase64').value = dataUrl;
+            
+            const img = document.getElementById('imgPreview');
+            img.src = dataUrl;
+            img.style.display = 'block';
+            status.textContent = '¡Vista previa extraída con éxito de Bambu Studio!';
+          } else {
+            status.textContent = 'Sin miniatura en el .3mf.';
+          }
+        } catch (err) {
+          status.textContent = 'Error al leer el archivo .3mf.';
+        }
+      } else {
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          document.getElementById('cFotoBase64').value = evt.target.result;
+          const img = document.getElementById('imgPreview');
+          img.src = evt.target.result;
+          img.style.display = 'block';
+          status.textContent = '';
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function renderFilamentosChecklist(containerId, selectedIds = []) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      if (filamentos.length === 0) {
+        container.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">No hay filamentos guardados.</span>';
+        return;
+      }
+
+      filamentos.forEach(f => {
+        const checked = selectedIds.includes(f.id) ? 'checked' : '';
+        const precio = f.precio_kg || f.precioKg || 20;
+        const colorHex = f.color_hex || '#808080';
+        container.innerHTML += `
+          <label class="fil-item">
+            <input type="checkbox" value="${f.id}" ${checked}>
+            <span class="color-box-sample" style="background-color:${colorHex}; width:16px; height:16px;"></span>
+            <span><strong>${f.marca}</strong> - ${f.color} (${f.tipo}) - ${precio}€/kg</span>
+          </label>
+        `;
+      });
+    }
+
+    function cargarSelectEmpresas(selectId, selectedId = '') {
+      const sel = document.getElementById(selectId);
+      sel.innerHTML = '';
+      if (empresas.length === 0) {
+        sel.innerHTML = '<option value="">⚠ Crea primero una carpeta en Empresas</option>';
+        return;
+      }
+
+      empresas.forEach((emp, index) => {
+        const isSel = (emp.id === selectedId || (!selectedId && index === 0)) ? 'selected' : '';
+        const prefijo = emp.padre_id ? '↳ ' : '📁 ';
+        sel.innerHTML += `<option value="${emp.id}" ${isSel}>${prefijo}${emp.nombre}</option>`;
+      });
+    }
+
+    function cargarCalculadora() {
+      cargarSelectEmpresas('cEmpresaSel');
+      renderFilamentosChecklist('cFilamentosChecklist');
+      if (document.getElementById('rPrecioBaseKg')) {
+        document.getElementById('rPrecioBaseKg').textContent = config.filamento;
+      }
+      calcular();
+    }
+
+    function obtenerFilamentosSeleccionados(containerId) {
+      const checkboxes = document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`);
+      return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    function calcular() {
+      const peso = parseFloat(document.getElementById('cPeso').value) || 0;
+      const colores = parseInt(document.getElementById('cColores').value) || 1;
+      const horas = parseFloat(document.getElementById('cHoras').value) || 0;
+      const mins = parseFloat(document.getElementById('cMinutos').value) || 0;
+      const descuentoPct = parseFloat(document.getElementById('cDescuentoPct').value) || 0;
+      const precioManual = parseFloat(document.getElementById('cPrecioManual').value);
+
+      const precioKg = config.filamento || 20;
+
+      const costeMat = (peso / 1000) * precioKg;
+      const costeColor = (colores - 1) * config.extraColor;
+      const costeTiempo = (horas + (mins / 60)) * config.horaMaquina;
+      const costeGastosFijos = config.gastosFijos;
+
+      const costeTotal = costeMat + costeColor + costeTiempo + costeGastosFijos;
+
+      let precioVenta = costeTotal * config.multiplicador;
+      if (descuentoPct > 0) {
+        precioVenta = precioVenta * (1 - (descuentoPct / 100));
+      }
+
+      if (!isNaN(precioManual) && precioManual > 0) {
+        precioVenta = precioManual;
+      }
+
+      document.getElementById('rMat').textContent = costeMat.toFixed(3) + ' €';
+      document.getElementById('rColor').textContent = costeColor.toFixed(3) + ' €';
+      document.getElementById('rTiempo').textContent = costeTiempo.toFixed(3) + ' €';
+      document.getElementById('rGastosFijos').textContent = costeGastosFijos.toFixed(3) + ' €';
+      document.getElementById('rDescVal').textContent = descuentoPct + ' %';
+      document.getElementById('rPrecioUnitario').textContent = precioVenta.toFixed(2) + ' €';
+
+      const cantCustom = parseInt(document.getElementById('cLoteCustom').value) || 1000;
+      const totalCustom = precioVenta * cantCustom;
+      const beneficioCustom = (precioVenta - costeTotal) * cantCustom;
+
+      document.getElementById('rLoteCustomTotal').textContent = totalCustom.toFixed(2) + ' €';
+      document.getElementById('rLoteCustomBeneficio').textContent = '+' + beneficioCustom.toFixed(2) + ' €';
+
+      const tbody = document.getElementById('tablaLotes');
+      tbody.innerHTML = '';
+      [100, 500, 1000, 5000].forEach(cant => {
+        tbody.innerHTML += `
+          <tr>
+            <td><strong>${cant.toLocaleString()} uds</strong></td>
+            <td>${(precioVenta * cant).toFixed(2)} €</td>
+            <td style="color:var(--success); font-weight:bold;">+${((precioVenta - costeTotal) * cant).toFixed(2)} €</td>
+          </tr>
+        `;
+      });
+
+      return { costeTotal, precioVenta, descuentoPct };
+    }
+
+    async function guardarEnCatalogo() {
+      const nombre = document.getElementById('cNombre').value.trim();
+      if(!nombre) { alert('Escribe el nombre de la pieza.'); return; }
+
+      const empSel = document.getElementById('cEmpresaSel').value;
+      if (!empSel || empSel === '') {
+        alert('Por favor, crea al menos una carpeta en la sección Empresas para guardar la pieza.');
+        return;
+      }
+
+      const res = calcular();
+      const selFils = obtenerFilamentosSeleccionados('cFilamentosChecklist');
+
+      const newId = 'prod_' + Date.now();
+      const dbProd = {
+        id: newId,
+        nombre: nombre,
+        empresa_id: empSel,
+        peso: parseFloat(document.getElementById('cPeso').value),
+        colores: parseInt(document.getElementById('cColores').value),
+        horas: parseFloat(document.getElementById('cHoras').value) || 0,
+        minutos: parseFloat(document.getElementById('cMinutos').value) || 0,
+        descuento_pct: res.descuentoPct,
+        filamentos_ids: selFils,
+        foto: document.getElementById('cFotoBase64').value,
+        notas: document.getElementById('cNotas').value,
+        coste_total: res.costeTotal,
+        precio_venta: res.precioVenta
+      };
+
+      await _supabase.from('productos').insert([dbProd]);
+      await cargarDatosDesdeNube();
+      alert('¡Pieza guardada en la Nube correctamente!');
+      switchTab('catalogo');
+    }
+
+    function previewLogoEmpresa(e) {
+      const file = e.target.files[0];
+      if(!file) return;
       const reader = new FileReader();
-      reader.onloadend = function() {
-        document.getElementById('cFotoBase64').value = reader.result;
+      reader.onload = function(evt) {
+        document.getElementById('eLogoBase64').value = evt.target.result;
+        const img = document.getElementById('imgPreviewLogo');
+        img.src = evt.target.result;
+        img.style.display = 'block';
       };
       reader.readAsDataURL(file);
     }
-  }
 
-  function calcular() {
-    const peso = parseFloat(document.getElementById('cPeso').value) || 0;
-    const horas = parseFloat(document.getElementById('cHoras').value) || 0;
-    const minutos = parseFloat(document.getElementById('cMinutos').value) || 0;
-    
-    // Suma extras
-    let costeExtras = 0;
-    document.querySelectorAll('#extrasContainer .extra-item').forEach(row => {
-      const p = parseFloat(row.querySelector('.extra-precio').value) || 0;
-      costeExtras += p;
-    });
+    async function guardarEmpresa(e) {
+      e.preventDefault();
+      const editId = document.getElementById('eEmpresaEditId').value;
+      const padreId = document.getElementById('ePadreSel').value || null;
 
-    // Cálculo base de estimación
-    const costeMaterial = peso * 0.025; // 25€/kg promedio estimado
-    const costeTiempo = (horas + (minutos / 60)) * 0.50; // coste máquina por hora
-    const costeTotal = costeMaterial + costeTiempo + costeExtras;
-    const precioVenta = costeTotal * 2.5;
+      const payload = {
+        nombre: document.getElementById('eNombreEmpresa').value,
+        logo: document.getElementById('eLogoBase64').value,
+        padre_id: padreId === 'NINGUNA' ? null : padreId
+      };
 
-    document.getElementById('resCosteTotal').innerText = costeTotal.toFixed(2);
-    document.getElementById('resPrecioVenta').innerText = precioVenta.toFixed(2);
+      if (editId) {
+        await _supabase.from('empresas').update(payload).eq('id', editId);
+      } else {
+        payload.id = 'emp_' + Date.now();
+        await _supabase.from('empresas').insert([payload]);
+      }
 
-    return { costeTotal, precioVenta };
-  }
-
-  async function guardarEnCatalogo() {
-    const nombre = document.getElementById('cNombre').value.trim();
-    if(!nombre) { 
-      alert('Por favor, escribe un nombre para la pieza.'); 
-      return; 
-    }
-
-    const res = calcular();
-    const selFils = obtenerFilamentosSeleccionados('cFilamentosChecklist');
-
-    // Recopilar extras dentro de notas para no romper compatibilidad de Supabase
-    let notasAdicionales = document.getElementById('cNotas').value || '';
-    let extrasTexto = [];
-    document.querySelectorAll('#extrasContainer .extra-item').forEach(row => {
-      const nom = row.querySelector('.extra-nombre').value.trim();
-      const prc = row.querySelector('.extra-precio').value;
-      if (nom) extrasTexto.push(`${nom}: ${prc}€`);
-    });
-
-    if (extrasTexto.length > 0) {
-      notasAdicionales += ` | Extras: [${extrasTexto.join(', ')}]`;
-    }
-
-    const newId = 'prod_' + Date.now();
-    const dbProd = {
-      id: newId,
-      nombre: nombre,
-      empresa_id: document.getElementById('cEmpresaSel').value || 'general',
-      peso: parseFloat(document.getElementById('cPeso').value) || 0,
-      colores: parseInt(document.getElementById('cColores').value) || 1,
-      horas: parseFloat(document.getElementById('cHoras').value) || 0,
-      minutos: parseFloat(document.getElementById('cMinutos').value) || 0,
-      descuento_pct: 0,
-      filamentos_ids: selFils,
-      foto: document.getElementById('cFotoBase64').value || '',
-      notas: notasAdicionales,
-      coste_total: res.costeTotal || 0,
-      precio_venta: res.precioVenta || 0
-    };
-
-    try {
-      const { data, error } = await _supabase.from('productos').insert([dbProd]);
-      
-      if (error) throw error;
-
+      resetFormEmpresa();
       await cargarDatosDesdeNube();
-      alert('¡Pieza guardada en la Nube correctamente!');
-      
-      // Limpiar formulario básico
-      document.getElementById('cNombre').value = '';
-      document.getElementById('extrasContainer').innerHTML = '';
-      
-      // Cambiar a pestaña de catálogo
-      switchTab('catalogo');
-    } catch (err) {
-      console.error("Error al guardar en Supabase:", err);
-      alert('Error al guardar en la nube: ' + (err.message || 'Comprueba tu conexión o credenciales'));
+      renderEmpresas();
     }
-  }
 
-  async function cargarDatosDesdeNube() {
-    try {
-      const { data, error } = await _supabase.from('productos').select('*');
-      if (error) throw error;
-      productosLocales = data || [];
+    function editarEmpresa(id) {
+      const emp = empresas.find(e => e.id === id);
+      if(!emp) return;
+      document.getElementById('eEmpresaEditId').value = emp.id;
+      document.getElementById('eNombreEmpresa').value = emp.nombre;
+      document.getElementById('eLogoBase64').value = emp.logo || '';
+      document.getElementById('empFormTitle').textContent = '✏ Editar Carpeta';
+      document.getElementById('btnGuardarEmpresa').textContent = 'Guardar Cambios';
+      document.getElementById('btnCancelarEditEmp').style.display = 'inline-block';
+
+      if (emp.logo) {
+        const img = document.getElementById('imgPreviewLogo');
+        img.src = emp.logo;
+        img.style.display = 'block';
+      }
+
+      cargarSelectPadresEmpresas(emp.id);
+      document.getElementById('ePadreSel').value = emp.padre_id || 'NINGUNA';
+    }
+
+    async function eliminarEmpresa(id) {
+      if(confirm('¿Eliminar esta carpeta?')) {
+        await _supabase.from('empresas').delete().eq('id', id);
+        await cargarDatosDesdeNube();
+        renderEmpresas();
+      }
+    }
+
+    function resetFormEmpresa() {
+      document.getElementById('eEmpresaEditId').value = '';
+      document.getElementById('empresaForm').reset();
+      document.getElementById('eLogoBase64').value = '';
+      document.getElementById('imgPreviewLogo').style.display = 'none';
+      document.getElementById('empFormTitle').textContent = '➕ Crear Carpeta de Empresa';
+      document.getElementById('btnGuardarEmpresa').textContent = 'Crear Carpeta';
+      document.getElementById('btnCancelarEditEmp').style.display = 'none';
+      cargarSelectPadresEmpresas();
+    }
+
+    function cargarSelectPadresEmpresas(excludeId = null) {
+      const sel = document.getElementById('ePadreSel');
+      sel.innerHTML = '<option value="NINGUNA">(Ninguna - Carpeta Principal)</option>';
+      empresas.forEach(emp => {
+        if(emp.id !== excludeId) {
+          sel.innerHTML += `<option value="${emp.id}">📁 ${emp.nombre}</option>`;
+        }
+      });
+    }
+
+    function renderEmpresas() {
+      cargarSelectPadresEmpresas();
+      const grid = document.getElementById('empresasGrid');
+      grid.innerHTML = '';
+      if (empresas.length === 0) {
+        grid.innerHTML = '<p style="color:var(--text-muted); font-size:0.9rem;">No tienes carpetas creadas. ¡Crea una primero!</p>';
+        return;
+      }
+
+      empresas.forEach(emp => {
+        const count = productos.filter(p => p.empresaId === emp.id).length;
+        const padre = empresas.find(e => e.id === emp.padre_id);
+        const subTexto = padre ? `<span style="font-size:0.75rem; color:var(--accent);">Subcarpeta de: ${padre.nombre}</span><br>` : '';
+
+        grid.innerHTML += `
+          <div class="product-card" style="padding:12px; text-align:center; position:relative;">
+            ${emp.logo ? `<img src="${emp.logo}" style="max-height:50px; object-fit:contain; margin-bottom:8px;">` : '📁'}
+            <strong style="display:block;">${emp.nombre}</strong>
+            ${subTexto}
+            <span style="font-size:0.8rem; color:var(--text-muted);">${count} piezas</span>
+            <div style="margin-top:8px; display:flex; gap:6px; justify-content:center;">
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;" onclick="editarEmpresa('${emp.id}')">✏️ Editar</button>
+              <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="eliminarEmpresa('${emp.id}')">🗑 Borrar</button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function previewFotoFilamento(e) {
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        document.getElementById('fFotoBase64').value = evt.target.result;
+        const img = document.getElementById('imgPreviewFilamento');
+        img.src = evt.target.result;
+        img.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function guardarFilamento(e) {
+      e.preventDefault();
+      const editId = document.getElementById('fFilamentoEditId').value;
+      const colorHex = document.getElementById('fColorHex').value || '#808080';
+      const idToSave = editId || ('fil_' + Date.now());
+
+      const payload = {
+        id: idToSave,
+        marca: document.getElementById('fMarca').value,
+        tipo: document.getElementById('fTipo').value,
+        color: document.getElementById('fColor').value,
+        precio_kg: parseFloat(document.getElementById('fPrecioKg').value) || 20,
+        url: document.getElementById('fUrl').value,
+        foto: document.getElementById('fFotoBase64').value
+      };
+
+      // Guardar el color en el almacenamiento local como respaldo asegurado
+      const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
+      localColors[idToSave] = colorHex;
+      localStorage.setItem('3d_fil_colors', JSON.stringify(localColors));
+
+      // Intentar guardar con la columna de color en la base de datos
+      try {
+        const payloadConColor = { ...payload, color_hex: colorHex };
+        if (editId) {
+          const { error } = await _supabase.from('filamentos').update(payloadConColor).eq('id', editId);
+          if (error) await _supabase.from('filamentos').update(payload).eq('id', editId);
+        } else {
+          const { error } = await _supabase.from('filamentos').insert([payloadConColor]);
+          if (error) await _supabase.from('filamentos').insert([payload]);
+        }
+      } catch (err) {
+        if (editId) {
+          await _supabase.from('filamentos').update(payload).eq('id', editId);
+        } else {
+          await _supabase.from('filamentos').insert([payload]);
+        }
+      }
+
+      resetFormFilamento();
+      await cargarDatosDesdeNube();
+      alert('¡Filamento guardado con éxito!');
+    }
+
+    function editarFilamento(id) {
+      const f = filamentos.find(x => x.id === id);
+      if(!f) return;
+      document.getElementById('fFilamentoEditId').value = f.id;
+      document.getElementById('fMarca').value = f.marca;
+      document.getElementById('fTipo').value = f.tipo;
+      document.getElementById('fColor').value = f.color;
+      document.getElementById('fColorHex').value = f.color_hex || '#808080';
+      document.getElementById('fPrecioKg').value = f.precio_kg || f.precioKg || 20;
+      document.getElementById('fUrl').value = f.url || '';
+      document.getElementById('fFotoBase64').value = f.foto || '';
+
+      if (f.foto) {
+        const img = document.getElementById('imgPreviewFilamento');
+        img.src = f.foto;
+        img.style.display = 'block';
+      }
+
+      document.getElementById('filFormTitle').textContent = '✏ Editar Filamento';
+      document.getElementById('btnGuardarFilamento').textContent = 'Guardar Cambios';
+      document.getElementById('btnCancelarEditFil').style.display = 'inline-block';
+    }
+
+    async function eliminarFilamento(id) {
+      if(confirm('¿Deseas borrar este filamento del catálogo?')) {
+        await _supabase.from('filamentos').delete().eq('id', id);
+        
+        // Limpiar también del respaldo local
+        const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
+        delete localColors[id];
+        localStorage.setItem('3d_fil_colors', JSON.stringify(localColors));
+
+        await cargarDatosDesdeNube();
+      }
+    }
+
+    function resetFormFilamento() {
+      document.getElementById('fFilamentoEditId').value = '';
+      document.getElementById('filamentoForm').reset();
+      document.getElementById('fColorHex').value = '#ef4444';
+      document.getElementById('fFotoBase64').value = '';
+      document.getElementById('imgPreviewFilamento').style.display = 'none';
+      document.getElementById('filFormTitle').textContent = '➕ Registrar Nuevo Filamento';
+      document.getElementById('btnGuardarFilamento').textContent = 'Guardar Filamento';
+      document.getElementById('btnCancelarEditFil').style.display = 'none';
+    }
+
+    function renderFilamentos() {
+      const grid = document.getElementById('filamentosGrid');
+      grid.innerHTML = '';
+
+      if (filamentos.length === 0) {
+        grid.innerHTML = '<p style="color:var(--text-muted); font-size:0.9rem;">No tienes ningún filamento registrado aún.</p>';
+        return;
+      }
+
+      filamentos.forEach(f => {
+        const precio = f.precio_kg || f.precioKg || 20;
+        const colorHex = f.color_hex || '#808080';
+
+        grid.innerHTML += `
+          <div class="product-card" style="padding:12px;">
+            ${f.foto ? `<img src="${f.foto}" style="width:100%; height:100px; object-fit:cover; border-radius:6px; margin-bottom:8px;">` : ''}
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <strong style="font-size:0.95rem;">${f.marca}</strong>
+              <span class="color-box-sample" style="background-color:${colorHex};" title="Color: ${colorHex}"></span>
+            </div>
+
+            <div style="font-size:0.85rem; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:6px;">
+              ${f.color}
+            </div>
+
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px; margin-bottom:10px;">
+              ${f.tipo} | <strong>${precio}€/kg</strong>
+            </div>
+
+            <div style="margin-top:auto; display:flex; gap:6px; flex-wrap:wrap;">
+              ${f.url ? `<a href="${f.url}" target="_blank" class="btn" style="padding:4px 8px; font-size:0.75rem; flex:1;">🛒 Comprar</a>` : ''}
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;" onclick="editarFilamento('${f.id}')">✏️ Edit</button>
+              <button class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="eliminarFilamento('${f.id}')">🗑️</button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function filtrarPorCarpeta(folderId) {
+      carpetaFiltroActual = folderId;
       renderCatalogo();
-    } catch (err) {
-      console.error("Error cargando productos:", err);
-    }
-  }
-
-  function renderCatalogo() {
-    const grid = document.getElementById('catalogoGrid');
-    grid.innerHTML = '';
-
-    if (productosLocales.length === 0) {
-      grid.innerHTML = '<p>No hay piezas guardadas aún.</p>';
-      return;
     }
 
-    productosLocales.forEach(p => {
-      const card = document.createElement('div');
-      card.className = 'pieza-card';
-      card.innerHTML = `
-        <img src="${p.foto || 'https://via.placeholder.com/150'}" class="pieza-img" alt="${p.nombre}">
-        <h3 style="margin: 10px 0 5px 0;">${p.nombre}</h3>
-        <p style="margin:0; color:#666; font-size: 14px;">Peso: ${p.peso}g | Colores: ${p.colores}</p>
-        <p style="margin:0; color:#666; font-size: 14px;">Tiempo: ${p.horas}h ${p.minutos}m</p>
-        <p style="margin:10px 0 0 0; font-weight:bold; color:var(--accent-color);">P. Venta: ${p.precio_venta ? p.precio_venta.toFixed(2) : '0.00'} €</p>
+    function renderCatalogo() {
+      const search = document.getElementById('catSearch').value.toLowerCase();
+      const grid = document.getElementById('catalogGrid');
+      const folderBar = document.getElementById('folderBar');
+
+      folderBar.innerHTML = `<div class="folder-chip ${carpetaFiltroActual === 'TODAS' ? 'active' : ''}" onclick="filtrarPorCarpeta('TODAS')">📁 Todas las Carpetas</div>`;
+      empresas.forEach(emp => {
+        folderBar.innerHTML += `<div class="folder-chip ${carpetaFiltroActual === emp.id ? 'active' : ''}" onclick="filtrarPorCarpeta('${emp.id}')">📁 ${emp.nombre}</div>`;
+      });
+
+      grid.innerHTML = '';
+      const filtrados = productos.filter(p => {
+        const coincideEmp = (carpetaFiltroActual === 'TODAS') || (p.empresaId === carpetaFiltroActual);
+        const coincideTexto = p.nombre.toLowerCase().includes(search) || (p.notas && p.notas.toLowerCase().includes(search));
+        return coincideEmp && coincideTexto;
+      });
+
+      const placeholder = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%23cbd5e1" stroke-width="1"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>';
+
+      filtrados.forEach(p => {
+        const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'Sin Carpeta' };
+        grid.innerHTML += `
+          <div class="product-card" onclick="verFicha('${p.id}')">
+            <img class="product-img" src="${p.foto || placeholder}">
+            <div class="product-body">
+              <div>
+                <strong style="font-size:1rem; display:block; margin-bottom:4px;">${p.nombre}</strong>
+                <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">
+                  📁 ${emp.nombre} | ⚖️ ${p.peso}g
+                </div>
+              </div>
+              <div style="font-size:1.2rem; font-weight:bold; color:var(--success);">
+                ${p.precioVenta ? p.precioVenta.toFixed(2) : '0.00'} € <span style="font-size:0.75rem; color:var(--text-muted);">/ud</span>
+                ${p.descuentoPct > 0 ? `<span style="font-size:0.75rem; color:var(--warning);">(-${p.descuentoPct}%)</span>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function verFicha(id) {
+      const p = productos.find(x => x.id === id);
+      if (!p) return;
+
+      const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'Sin Carpeta' };
+      const filsAsoc = filamentos.filter(f => (p.filamentosIds || []).includes(f.id));
+
+      let htmlFils = '';
+      if(filsAsoc.length > 0) {
+        filsAsoc.forEach(f => {
+          const colorHex = f.color_hex || '#808080';
+          htmlFils += `
+            <div class="fil-badge-item">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <span class="color-box-sample" style="background-color:${colorHex}; width:16px; height:16px;"></span>
+                <strong>${f.marca}</strong> - ${f.color} (${f.tipo})
+              </span>
+              ${f.url ? `<a href="${f.url}" target="_blank" class="btn" style="padding:2px 8px; font-size:0.75rem;">🛒 Comprar</a>` : ''}
+            </div>
+          `;
+        });
+      } else {
+        htmlFils = '<span style="color:var(--text-muted); font-size:0.85rem;">Ningún filamento asignado.</span>';
+      }
+
+      document.getElementById('modalContent').innerHTML = `
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+          ${p.foto ? `<img src="${p.foto}" style="max-width:200px; width:100%; height:180px; object-fit:cover; border-radius:8px; border:1px solid var(--border);">` : ''}
+          <div style="flex:1; min-width:200px;">
+            <h2 style="color:var(--accent-hover); margin-bottom:6px;">${p.nombre}</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">📁 Carpeta: <strong>${emp.nombre}</strong></div>
+            <div style="font-size:1.3rem; font-weight:bold; color:var(--success); margin-bottom:10px;">${p.precioVenta.toFixed(2)} € / ud</div>
+            <p style="font-size:0.85rem; color:var(--text-muted);"><strong>Peso:</strong> ${p.peso}g | <strong>Tiempo:</strong> ${p.horas}h ${p.minutos}m | <strong>Colores:</strong> ${p.colores}</p>
+            ${p.notas ? `<p style="font-size:0.85rem; margin-top:8px; background:var(--card-bg); padding:8px; border-radius:6px;">📝 ${p.notas}</p>` : ''}
+          </div>
+        </div>
+
+        <div style="margin-bottom:15px;">
+          <h4 style="margin-bottom:8px; color:var(--text-muted);">Filamentos de la pieza:</h4>
+          ${htmlFils}
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:16px;">
+          <button class="btn btn-warning" style="flex:1;" onclick="abrirEdicionProducto('${p.id}')">✏️ Editar Pieza</button>
+          <button class="btn btn-danger" style="flex:1;" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar Pieza</button>
+        </div>
       `;
-      grid.appendChild(card);
-    });
-  }
 
-  // Carga inicial
-  window.onload = function() {
-    calcular();
-    cargarDatosDesdeNube();
-  };
-</script>
+      document.getElementById('modalProducto').classList.add('active');
+    }
 
+    function abrirEdicionProducto(id) {
+      const p = productos.find(x => x.id === id);
+      if(!p) return;
+      closeModal();
+
+      document.getElementById('cNombre').value = p.nombre;
+      document.getElementById('cPeso').value = p.peso;
+      document.getElementById('cColores').value = p.colores;
+      document.getElementById('cHoras').value = p.horas;
+      document.getElementById('cMinutos').value = p.minutos;
+      document.getElementById('cDescuentoPct').value = p.descuentoPct || 0;
+      document.getElementById('cNotas').value = p.notas || '';
+      document.getElementById('cFotoBase64').value = p.foto || '';
+
+      cargarSelectEmpresas('cEmpresaSel', p.empresaId);
+      renderFilamentosChecklist('cFilamentosChecklist', p.filamentosIds || []);
+
+      if (p.foto) {
+        const img = document.getElementById('imgPreview');
+        img.src = p.foto;
+        img.style.display = 'block';
+      }
+
+      switchTab('calculadora');
+      eliminarProducto(p.id, false);
+    }
+
+    async function eliminarProducto(id, confirmar = true) {
+      if (!confirmar || confirm('¿Estás seguro de borrar esta pieza de la nube?')) {
+        await _supabase.from('productos').delete().eq('id', id);
+        closeModal();
+        await cargarDatosDesdeNube();
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('modalProducto').classList.remove('active');
+    }
+
+    function cargarAjustesInputs() {
+      document.getElementById('cfgFilamento').value = config.filamento;
+      document.getElementById('cfgHoraMaquina').value = config.horaMaquina;
+      document.getElementById('cfgExtraColor').value = config.extraColor;
+      document.getElementById('cfgGastosFijos').value = config.gastosFijos;
+      document.getElementById('cfgMultiplicador').value = config.multiplicador;
+    }
+
+    function guardarAjustes() {
+      config.filamento = parseFloat(document.getElementById('cfgFilamento').value) || 20;
+      config.horaMaquina = parseFloat(document.getElementById('cfgHoraMaquina').value) || 0.20;
+      config.extraColor = parseFloat(document.getElementById('cfgExtraColor').value) || 0.05;
+      config.gastosFijos = parseFloat(document.getElementById('cfgGastosFijos').value) || 0;
+      config.multiplicador = parseFloat(document.getElementById('cfgMultiplicador').value) || 2.0;
+
+      localStorage.setItem('3d_cfg_v7', JSON.stringify(config));
+      alert('¡Ajustes guardados!');
+      calcular();
+    }
+
+    window.onload = function() {
+      cargarDatosDesdeNube();
+    };
+  </script>
 </body>
 </html>
