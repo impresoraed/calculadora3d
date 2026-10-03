@@ -522,6 +522,14 @@
 
     let carpetaFiltroActual = 'TODAS';
 
+    // Generador de UUID único por si la tabla no lo genera automáticamente
+    function generarUUID() {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      return 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+    }
+
     async function cargarDatosDesdeNube() {
       try {
         const { data: emps } = await _supabase.from('empresas').select('*').order('created_at', { ascending: true });
@@ -873,8 +881,9 @@
       const extrasMetaData = extrasItems.length > 0 ? `\n\n[COMPONENTES_EXTRA]: ${JSON.stringify(extrasItems)}` : '';
       const notasFinales = notasUsuario + extrasMetaData;
 
-      // Objeto estrictamente compatible con las columnas de tu Supabase original
+      // Asignamos explícitamente un 'id' único generado en JS para evitar que Supabase dé fallo por 'null value'
       const nuevoProducto = {
+        id: generarUUID(),
         nombre: nombre,
         empresa_id: empresaId,
         peso: peso,
@@ -1068,7 +1077,7 @@
 
       if (!nombre) return;
 
-      const nuevaEmpresa = { nombre, padre_id: padreId || null, logo };
+      const nuevaEmpresa = { id: generarUUID(), nombre, padre_id: padreId || null, logo };
       try {
         const { error } = await _supabase.from('empresas').insert([nuevaEmpresa]);
         if (error) throw error;
@@ -1153,7 +1162,7 @@
 
       if (!marca || !tipo || !color) return;
 
-      const nuevoFil = { marca, tipo, color, color_hex: colorHex, precio_kg: precioKg, url, foto };
+      const nuevoFil = { id: generarUUID(), marca, tipo, color, color_hex: colorHex, precio_kg: precioKg, url, foto };
 
       try {
         const { data, error } = await _supabase.from('filamentos').insert([nuevoFil]).select();
