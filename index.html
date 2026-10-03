@@ -1027,7 +1027,15 @@
       if (p.filamentosIds && p.filamentosIds.length > 0) {
         filsHtml = p.filamentosIds.map(fid => {
           const f = filamentos.find(item => item.id === fid);
-          return f ? `<span style="display:inline-flex; align-items:center; gap:4px; margin-right:8px; background:var(--card-bg); padding:2px 6px; border-radius:4px; font-size:0.8rem;"><span class="color-box-sample" style="background:${f.color_hex}; width:12px; height:12px;"></span> ${f.marca} ${f.color}</span>` : '';
+          if (!f) return '';
+          const btnComprar = f.url ? `<a href="${f.url}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none; padding:2px 6px; font-size:0.75rem;">🛒 Comprar</a>` : '';
+          return `<div style="display:flex; align-items:center; justify-content:space-between; background:var(--card-bg); padding:6px 10px; border-radius:6px; margin-bottom:4px; font-size:0.85rem;">
+            <span style="display:inline-flex; align-items:center; gap:6px;">
+              <span class="color-box-sample" style="background:${f.color_hex}; width:14px; height:14px;"></span>
+              <strong>${f.marca} ${f.tipo}</strong> - ${f.color} (${f.precio_kg} €/kg)
+            </span>
+            ${btnComprar}
+          </div>`;
         }).join('');
       }
 
@@ -1048,7 +1056,7 @@
           </div>
         </div>
 
-        ${filsHtml ? `<div style="margin-bottom:12px;"><strong>Filamentos:</strong><div>${filsHtml}</div></div>` : ''}
+        ${filsHtml ? `<div style="margin-bottom:12px;"><strong>Filamentos utilizados:</strong><div style="margin-top:6px;">${filsHtml}</div></div>` : ''}
         ${extrasHtml ? `<div style="margin-bottom:12px;"><strong>Componentes Extra:</strong><ul>${extrasHtml}</ul></div>` : ''}
         ${p.notas ? `<div style="margin-bottom:16px; background:var(--card-bg); padding:10px; border-radius:6px; font-size:0.85rem;"><strong>Notas:</strong> ${p.notas}</div>` : ''}
 
