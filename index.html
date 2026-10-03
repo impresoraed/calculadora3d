@@ -130,6 +130,40 @@
       box-shadow: inset 0 0 2px rgba(0,0,0,0.2);
     }
 
+    /* DESPLEGABLE COMPONENTES EXTRA */
+    .extra-toggle-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .extra-box {
+      display: none;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .extra-box.active { display: block; }
+    .extra-item-row {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+      position: relative;
+    }
+
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 8px; }
     th, td { padding: 8px; text-align: right; border-bottom: 1px solid var(--border); }
     th:first-child, td:first-child { text-align: left; }
@@ -224,7 +258,7 @@
 
           <div class="form-group">
             <label>Nombre / Referencia de la pieza</label>
-            <input type="text" id="cNombre" value="Tapón Colgador G" placeholder="Ej. Tapón, Pasacables...">
+            <input type="text" id="cNombre" value="Tapón Colgador G" placeholder="Ej. Lámpara, Tapón, Pasacables...">
           </div>
 
           <div class="form-group">
@@ -267,6 +301,19 @@
             </div>
           </div>
 
+          <!-- SECCIÓN DESPLEGABLE DE COMPONENTES EXTRA -->
+          <button type="button" class="extra-toggle-btn" onclick="toggleExtraBox()">
+            <span>🔩 Componentes / Sobrecostes Extra (Imanes, Cables, etc.)</span>
+            <span id="extraToggleArrow">▼</span>
+          </button>
+
+          <div id="extraBox" class="extra-box">
+            <div id="extraContainer"></div>
+            <button type="button" class="btn btn-secondary" style="width:100%; font-size:0.8rem;" onclick="addExtraItemRow()">
+              ➕ Añadir Componente Extra
+            </button>
+          </div>
+
           <div class="row">
             <div class="form-group">
               <label>Descuento Especial (%)</label>
@@ -301,6 +348,9 @@
             </div>
             <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
               <span>Tiempo Máquina:</span> <strong id="rTiempo">0.000 €</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px; color:var(--accent-hover);">
+              <span>Componentes Extra:</span> <strong id="rExtrasVal">0.000 €</strong>
             </div>
             <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
               <span>Gastos Fijos:</span> <strong id="rGastosFijos">0.000 €</strong>
@@ -505,10 +555,9 @@
         const { data: emps } = await _supabase.from('empresas').select('*').order('created_at', { ascending: true });
         empresas = emps || [];
 
-        const { data: fils, error: errFils } = await _supabase.from('filamentos').select('*').order('created_at', { ascending: false });
+        const { data: fils } = await _supabase.from('filamentos').select('*').order('created_at', { ascending: false });
         filamentos = fils || [];
 
-        // Recuperar colores de respaldo en local si la nube no guarda la columna color_hex
         const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
         filamentos = filamentos.map(f => ({
           ...f,
@@ -523,6 +572,7 @@
           empresaId: (p.empresa_id && p.empresa_id !== 'emp_general' && p.empresa_id !== 'null' && p.empresa_id !== '') ? p.empresa_id : primeraCarpetaId,
           descuentoPct: p.descuento_pct,
           filamentosIds: p.filamentos_ids || [],
+          componentesExtra: p.componentes_extra || [],
           costeTotal: p.coste_total,
           precioVenta: p.precio_venta
         }));
@@ -640,6 +690,81 @@
       }
     }
 
+    function toggleExtraBox() {
+      const box = document.getElementById('extraBox');
+      const arrow = document.getElementById('extraToggleArrow');
+      if (box.classList.contains('active')) {
+        box.classList.remove('active');
+        arrow.textContent = '▼';
+      } else {
+        box.classList.add('active');
+        arrow.textContent = '▲';
+        if (document.querySelectorAll('.extra-item-row').length === 0) {
+          addExtraItemRow();
+        }
+      }
+    }
+
+    function addExtraItemRow(nombre = '', precio = '', cant = '1', url = '') {
+      const container = document.getElementById('extraContainer');
+      const rowId = 'ex_row_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+
+      const div = document.createElement('div');
+      div.className = 'extra-item-row';
+      div.id = rowId;
+      div.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <strong style="font-size:0.75rem; color:var(--text-muted);">COMPONENTE EXTRA</strong>
+          <button type="button" class="btn btn-danger" style="padding:2px 6px; font-size:0.7rem;" onclick="removeExtraItemRow('${rowId}')">✕ Quitar</button>
+        </div>
+        <div class="form-group" style="margin-bottom:6px;">
+          <input type="text" class="ex-nombre" placeholder="Nombre (Ej. Imán Neodimio 5x25mm, Cable...)" value="${nombre}" oninput="calcular()">
+        </div>
+        <div class="row">
+          <div class="form-group" style="margin-bottom:6px;">
+            <label style="font-size:0.65rem;">Precio/ud (€)</label>
+            <input type="number" class="ex-precio" step="0.01" placeholder="0.15" value="${precio}" oninput="calcular()">
+          </div>
+          <div class="form-group" style="margin-bottom:6px;">
+            <label style="font-size:0.65rem;">Cantidad</label>
+            <input type="number" class="ex-cant" min="1" step="1" value="${cant}" oninput="calcular()">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <input type="url" class="ex-url" placeholder="URL de compra (https://...)" value="${url}">
+        </div>
+      `;
+      container.appendChild(div);
+      calcular();
+    }
+
+    function removeExtraItemRow(rowId) {
+      const el = document.getElementById(rowId);
+      if (el) el.remove();
+      calcular();
+    }
+
+    function obtenerComponentesExtra() {
+      const rows = document.querySelectorAll('.extra-item-row');
+      const extras = [];
+      rows.forEach(row => {
+        const nom = row.querySelector('.ex-nombre').value.trim();
+        const p = parseFloat(row.querySelector('.ex-precio').value) || 0;
+        const c = parseInt(row.querySelector('.ex-cant').value) || 1;
+        const u = row.querySelector('.ex-url').value.trim();
+
+        if (nom || p > 0) {
+          extras.push({
+            nombre: nom || 'Componente Extra',
+            precioUnitario: p,
+            cantidad: c,
+            url: u
+          });
+        }
+      });
+      return extras;
+    }
+
     function renderFilamentosChecklist(containerId, selectedIds = []) {
       const container = document.getElementById(containerId);
       container.innerHTML = '';
@@ -706,7 +831,10 @@
       const costeTiempo = (horas + (mins / 60)) * config.horaMaquina;
       const costeGastosFijos = config.gastosFijos;
 
-      const costeTotal = costeMat + costeColor + costeTiempo + costeGastosFijos;
+      const componentesExtra = obtenerComponentesExtra();
+      const costeExtras = componentesExtra.reduce((sum, item) => sum + (item.precioUnitario * item.cantidad), 0);
+
+      const costeTotal = costeMat + costeColor + costeTiempo + costeGastosFijos + costeExtras;
 
       let precioVenta = costeTotal * config.multiplicador;
       if (descuentoPct > 0) {
@@ -721,6 +849,7 @@
       document.getElementById('rColor').textContent = costeColor.toFixed(3) + ' €';
       document.getElementById('rTiempo').textContent = costeTiempo.toFixed(3) + ' €';
       document.getElementById('rGastosFijos').textContent = costeGastosFijos.toFixed(3) + ' €';
+      document.getElementById('rExtrasVal').textContent = costeExtras.toFixed(3) + ' €';
       document.getElementById('rDescVal').textContent = descuentoPct + ' %';
       document.getElementById('rPrecioUnitario').textContent = precioVenta.toFixed(2) + ' €';
 
@@ -743,7 +872,7 @@
         `;
       });
 
-      return { costeTotal, precioVenta, descuentoPct };
+      return { costeTotal, precioVenta, descuentoPct, componentesExtra };
     }
 
     async function guardarEnCatalogo() {
@@ -770,13 +899,21 @@
         minutos: parseFloat(document.getElementById('cMinutos').value) || 0,
         descuento_pct: res.descuentoPct,
         filamentos_ids: selFils,
+        componentes_extra: res.componentesExtra,
         foto: document.getElementById('cFotoBase64').value,
         notas: document.getElementById('cNotas').value,
         coste_total: res.costeTotal,
         precio_venta: res.precioVenta
       };
 
-      await _supabase.from('productos').insert([dbProd]);
+      try {
+        await _supabase.from('productos').insert([dbProd]);
+      } catch (err) {
+        // Fallback por si la columna componentes_extra no existe aún en Supabase
+        delete dbProd.componentes_extra;
+        await _supabase.from('productos').insert([dbProd]);
+      }
+
       await cargarDatosDesdeNube();
       alert('¡Pieza guardada en la Nube correctamente!');
       switchTab('catalogo');
@@ -925,12 +1062,10 @@
         foto: document.getElementById('fFotoBase64').value
       };
 
-      // Guardar el color en el almacenamiento local como respaldo asegurado
       const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
       localColors[idToSave] = colorHex;
       localStorage.setItem('3d_fil_colors', JSON.stringify(localColors));
 
-      // Intentar guardar con la columna de color en la base de datos
       try {
         const payloadConColor = { ...payload, color_hex: colorHex };
         if (editId) {
@@ -980,7 +1115,6 @@
       if(confirm('¿Deseas borrar este filamento del catálogo?')) {
         await _supabase.from('filamentos').delete().eq('id', id);
         
-        // Limpiar también del respaldo local
         const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
         delete localColors[id];
         localStorage.setItem('3d_fil_colors', JSON.stringify(localColors));
@@ -1111,6 +1245,22 @@
         htmlFils = '<span style="color:var(--text-muted); font-size:0.85rem;">Ningún filamento asignado.</span>';
       }
 
+      let htmlExtras = '';
+      if (p.componentesExtra && p.componentesExtra.length > 0) {
+        p.componentesExtra.forEach(ex => {
+          htmlExtras += `
+            <div class="fil-badge-item">
+              <span>
+                <strong>${ex.nombre}</strong> (${ex.cantidad}x) - ${ex.precioUnitario.toFixed(2)}€/ud
+              </span>
+              ${ex.url ? `<a href="${ex.url}" target="_blank" class="btn btn-secondary" style="padding:2px 8px; font-size:0.75rem;">🛒 Comprar</a>` : ''}
+            </div>
+          `;
+        });
+      } else {
+        htmlExtras = '<span style="color:var(--text-muted); font-size:0.85rem;">Sin componentes extra.</span>';
+      }
+
       document.getElementById('modalContent').innerHTML = `
         <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
           ${p.foto ? `<img src="${p.foto}" style="max-width:200px; width:100%; height:180px; object-fit:cover; border-radius:8px; border:1px solid var(--border);">` : ''}
@@ -1128,8 +1278,13 @@
           ${htmlFils}
         </div>
 
+        <div style="margin-bottom:15px;">
+          <h4 style="margin-bottom:8px; color:var(--text-muted);">Componentes / Sobrecostes Extra:</h4>
+          ${htmlExtras}
+        </div>
+
         <div style="display:flex; gap:10px; margin-top:16px;">
-          <button class="btn btn-warning" style="flex:1;" onclick="abrirEdicionProducto('${p.id}')">✏️ Editar Pieza</button>
+          <button class="btn btn-warning" style="flex:1;" onclick="abrirEdicionProducto('${p.id}')">✏️️ Editar Pieza</button>
           <button class="btn btn-danger" style="flex:1;" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar Pieza</button>
         </div>
       `;
@@ -1153,6 +1308,16 @@
 
       cargarSelectEmpresas('cEmpresaSel', p.empresaId);
       renderFilamentosChecklist('cFilamentosChecklist', p.filamentosIds || []);
+
+      const container = document.getElementById('extraContainer');
+      container.innerHTML = '';
+      if (p.componentesExtra && p.componentesExtra.length > 0) {
+        document.getElementById('extraBox').classList.add('active');
+        document.getElementById('extraToggleArrow').textContent = '▲';
+        p.componentesExtra.forEach(ex => {
+          addExtraItemRow(ex.nombre, ex.precioUnitario, ex.cantidad, ex.url || '');
+        });
+      }
 
       if (p.foto) {
         const img = document.getElementById('imgPreview');
