@@ -192,7 +192,7 @@
         <div class="card">
           <div class="card-title">Acceso Rápido</div>
           <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
-            <button class="btn btn-success" style="flex:1; min-width:140px;" onclick="switchTab('calculadora')">🧮 Nueva Pieza</button>
+            <button class="btn btn-success" style="flex:1; min-width:140px;" onclick="nuevaPiezaLimpia()">🧮 Nueva Pieza</button>
             <button class="btn btn-secondary" style="flex:1; min-width:140px;" onclick="switchTab('filamentos')">🎨 Nuevo Filamento</button>
           </div>
 
@@ -226,7 +226,8 @@
     <div id="tab-calculadora" class="tab-content">
       <div class="grid-2">
         <div class="card">
-          <div class="card-title">1. Datos de la Pieza</div>
+          <div class="card-title"><span id="calcFormTitle">1. Datos de la Pieza</span></div>
+          <input type="hidden" id="cProductoEditId">
 
           <div class="form-group">
             <label>Nombre / Referencia de la pieza</label>
@@ -360,9 +361,14 @@
             <tbody id="tablaLotes"></tbody>
           </table>
 
-          <button class="btn btn-success" style="width: 100%; margin-top: 16px;" onclick="guardarEnCatalogo()">
-            💾 Guardar esta Pieza en la Nube
-          </button>
+          <div style="display:flex; gap:10px; margin-top:16px;">
+            <button class="btn btn-success" style="flex:1;" id="btnGuardarProducto" onclick="guardarEnCatalogo()">
+              💾 Guardar esta Pieza en la Nube
+            </button>
+            <button class="btn btn-secondary" id="btnCancelarEditProd" style="display:none;" onclick="resetFormCalculadora()">
+              Cancelar
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -522,7 +528,6 @@
 
     let carpetaFiltroActual = 'TODAS';
 
-    // Generador de UUID único por si la tabla no lo genera automáticamente
     function generarUUID() {
       if (typeof crypto !== 'undefined' && crypto.randomUUID) {
         return crypto.randomUUID();
@@ -750,6 +755,41 @@
     }
 
     function cargarCalculadora() {
+      const editId = document.getElementById('cProductoEditId').value;
+      if (!editId) {
+        cargarSelectEmpresas('cEmpresaSel');
+        renderFilamentosChecklist('cFilamentosChecklist');
+      }
+      calcular();
+    }
+
+    function nuevaPiezaLimpia() {
+      resetFormCalculadora();
+      switchTab('calculadora');
+    }
+
+    function resetFormCalculadora() {
+      document.getElementById('cProductoEditId').value = '';
+      document.getElementById('calcFormTitle').textContent = '1. Datos de la Pieza';
+      document.getElementById('btnGuardarProducto').textContent = '💾 Guardar esta Pieza en la Nube';
+      document.getElementById('btnCancelarEditProd').style.display = 'none';
+
+      document.getElementById('cNombre').value = '';
+      document.getElementById('cPeso').value = '1.5';
+      document.getElementById('cHoras').value = '0';
+      document.getElementById('cMinutos').value = '3';
+      document.getElementById('cDescuentoPct').value = '0';
+      document.getElementById('cPrecioManual').value = '';
+      document.getElementById('cFotoBase64').value = '';
+      document.getElementById('cNotas').value = '';
+      document.getElementById('status3mf').textContent = '';
+      
+      const img = document.getElementById('imgPreview');
+      img.src = '';
+      img.style.display = 'none';
+
+      document.getElementById('cExtrasContainer').innerHTML = '';
+
       cargarSelectEmpresas('cEmpresaSel');
       renderFilamentosChecklist('cFilamentosChecklist');
       calcular();
@@ -838,6 +878,7 @@
     }
 
     async function guardarEnCatalogo() {
+      const editId = document.getElementById('cProductoEditId').value;
       const nombre = document.getElementById('cNombre').value.trim();
       const empresaId = document.getElementById('cEmpresaSel').value;
 
@@ -881,9 +922,7 @@
       const extrasMetaData = extrasItems.length > 0 ? `\n\n[COMPONENTES_EXTRA]: ${JSON.stringify(extrasItems)}` : '';
       const notasFinales = notasUsuario + extrasMetaData;
 
-      // Asignamos explícitamente un 'id' único generado en JS para evitar que Supabase dé fallo por 'null value'
-      const nuevoProducto = {
-        id: generarUUID(),
+      const payloadProducto = {
         nombre: nombre,
         empresa_id: empresaId,
         peso: peso,
@@ -898,20 +937,74 @@
       };
 
       try {
-        const { data, error } = await _supabase.from('productos').insert([nuevoProducto]).select();
-        if (error) {
-          console.error('Error directo de Supabase:', error);
-          alert('Error de Supabase: ' + (error.message || 'Verifica la consola'));
-          return;
+        if (editId) {
+          const { error } = await _supabase.from('productos').update(payloadProducto).eq('id', editId);
+          if (error) throw error;
+          alert('¡Pieza actualizada correctamente!');
+        } else {
+          payloadProducto.id = generarUUID();
+          const { error } = await _supabase.from('productos').insert([payloadProducto]);
+          if (error) throw error;
+          alert('¡Pieza guardada correctamente en la nube!');
         }
 
-        alert('¡Pieza guardada correctamente en la nube!');
+        resetFormCalculadora();
         await cargarDatosDesdeNube();
         switchTab('catalogo');
       } catch (e) {
         console.error('Error al guardar pieza:', e);
-        alert('Error al guardar en Supabase.');
+        alert('Error al guardar en Supabase: ' + (e.message || ''));
       }
+    }
+
+    function editarProducto(prodId) {
+      closeModal();
+      const p = productos.find(item => item.id === prodId);
+      if (!p) return;
+
+      document.getElementById('cProductoEditId').value = p.id;
+      document.getElementById('calcFormTitle').textContent = '✏️ Editar Pieza';
+      document.getElementById('btnGuardarProducto').textContent = '🔄 Actualizar Pieza';
+      document.getElementById('btnCancelarEditProd').style.display = 'inline-block';
+
+      document.getElementById('cNombre').value = p.nombre || '';
+      document.getElementById('cPeso').value = p.peso || 0;
+      document.getElementById('cHoras').value = p.horas || 0;
+      document.getElementById('cMinutos').value = p.minutos || 0;
+      document.getElementById('cDescuentoPct').value = p.descuentoPct || 0;
+      document.getElementById('cPrecioManual').value = p.precioVenta || '';
+
+      cargarSelectEmpresas('cEmpresaSel', p.empresaId);
+      renderFilamentosChecklist('cFilamentosChecklist', p.filamentosIds || []);
+
+      document.getElementById('cFotoBase64').value = p.foto || '';
+      const img = document.getElementById('imgPreview');
+      if (p.foto) {
+        img.src = p.foto;
+        img.style.display = 'block';
+      } else {
+        img.src = '';
+        img.style.display = 'none';
+      }
+
+      document.getElementById('cExtrasContainer').innerHTML = '';
+      let notasLimpias = p.notas || '';
+      if (notasLimpias.includes('[COMPONENTES_EXTRA]:')) {
+        const partes = notasLimpias.split('[COMPONENTES_EXTRA]:');
+        notasLimpias = partes[0].trim();
+        try {
+          const extrasParsed = JSON.parse(partes[1].trim());
+          if (extrasParsed && extrasParsed.length > 0) {
+            extrasParsed.forEach(ext => {
+              addExtraRow(ext.concepto, ext.precio, ext.cantidad, ext.url);
+            });
+          }
+        } catch(e){}
+      }
+      document.getElementById('cNotas').value = notasLimpias;
+
+      switchTab('calculadora');
+      calcular();
     }
 
     function renderCatalogo() {
@@ -1010,6 +1103,7 @@
         ${notasLimpias ? `<p style="font-size:0.85rem; background:var(--card-bg); padding:10px; border-radius:6px; margin-top:10px;"><strong>Notas:</strong> ${notasLimpias}</p>` : ''}
 
         <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px;">
+          <button class="btn btn-warning" onclick="editarProducto('${p.id}')">✏️ Editar Pieza</button>
           <button class="btn btn-danger" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar Pieza</button>
         </div>
       `;
@@ -1128,13 +1222,41 @@
             </div>
             <p style="font-size:0.8rem; color:var(--text-muted);">${f.color}</p>
             <strong style="color:var(--success); font-size:0.9rem; display:block; margin-top:4px;">${f.precio_kg || f.precioKg || 20} €/kg</strong>
-            ${f.url ? `<a href="${f.url}" target="_blank" style="font-size:0.75rem; color:var(--accent); text-decoration:underline;">Tienda Web</a>` : ''}
-            <div style="margin-top:8px;">
-              <button class="btn btn-danger btn-sm" style="width:100%;" onclick="eliminarFilamento('${f.id}')">Eliminar</button>
+            ${f.url ? `<a href="${f.url}" target="_blank" style="font-size:0.75rem; color:var(--accent); text-decoration:underline; display:inline-block; margin-top:4px;">Tienda Web</a>` : ''}
+            <div style="margin-top:8px; display:flex; gap:6px;">
+              <button class="btn btn-warning btn-sm" style="flex:1;" onclick="editarFilamento('${f.id}')">✏️ Editar</button>
+              <button class="btn btn-danger btn-sm" style="flex:1;" onclick="eliminarFilamento('${f.id}')">🗑️ Eliminar</button>
             </div>
           </div>
         `;
       });
+    }
+
+    function editarFilamento(id) {
+      const f = filamentos.find(item => item.id === id);
+      if (!f) return;
+
+      document.getElementById('fFilamentoEditId').value = f.id;
+      document.getElementById('filFormTitle').textContent = '✏️ Editar Filamento';
+      document.getElementById('btnGuardarFilamento').textContent = '🔄 Actualizar Filamento';
+      document.getElementById('btnCancelarEditFil').style.display = 'inline-block';
+
+      document.getElementById('fMarca').value = f.marca || '';
+      document.getElementById('fTipo').value = f.tipo || '';
+      document.getElementById('fColor').value = f.color || '';
+      document.getElementById('fColorHex').value = f.color_hex || '#ef4444';
+      document.getElementById('fPrecioKg').value = f.precio_kg || f.precioKg || 20;
+      document.getElementById('fUrl').value = f.url || '';
+      document.getElementById('fFotoBase64').value = f.foto || '';
+
+      const img = document.getElementById('imgPreviewFilamento');
+      if (f.foto) {
+        img.src = f.foto;
+        img.style.display = 'block';
+      } else {
+        img.src = '';
+        img.style.display = 'none';
+      }
     }
 
     function previewFotoFilamento(e) {
@@ -1152,6 +1274,7 @@
 
     async function guardarFilamento(e) {
       e.preventDefault();
+      const editId = document.getElementById('fFilamentoEditId').value;
       const marca = document.getElementById('fMarca').value.trim();
       const tipo = document.getElementById('fTipo').value.trim();
       const color = document.getElementById('fColor').value.trim();
@@ -1162,16 +1285,26 @@
 
       if (!marca || !tipo || !color) return;
 
-      const nuevoFil = { id: generarUUID(), marca, tipo, color, color_hex: colorHex, precio_kg: precioKg, url, foto };
+      const payloadFil = { marca, tipo, color, color_hex: colorHex, precio_kg: precioKg, url, foto };
 
       try {
-        const { data, error } = await _supabase.from('filamentos').insert([nuevoFil]).select();
-        if (error) throw error;
+        if (editId) {
+          const { error } = await _supabase.from('filamentos').update(payloadFil).eq('id', editId);
+          if (error) throw error;
 
-        if (data && data[0]) {
           const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
-          localColors[data[0].id] = colorHex;
+          localColors[editId] = colorHex;
           localStorage.setItem('3d_fil_colors', JSON.stringify(localColors));
+        } else {
+          payloadFil.id = generarUUID();
+          const { data, error } = await _supabase.from('filamentos').insert([payloadFil]).select();
+          if (error) throw error;
+
+          if (data && data[0]) {
+            const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
+            localColors[data[0].id] = colorHex;
+            localStorage.setItem('3d_fil_colors', JSON.stringify(localColors));
+          }
         }
 
         resetFormFilamento();
@@ -1184,6 +1317,11 @@
 
     function resetFormFilamento() {
       document.getElementById('filamentoForm').reset();
+      document.getElementById('fFilamentoEditId').value = '';
+      document.getElementById('filFormTitle').textContent = '➕ Registrar Nuevo Filamento';
+      document.getElementById('btnGuardarFilamento').textContent = 'Guardar Filamento';
+      document.getElementById('btnCancelarEditFil').style.display = 'none';
+
       document.getElementById('fFotoBase64').value = '';
       document.getElementById('imgPreviewFilamento').style.display = 'none';
     }
