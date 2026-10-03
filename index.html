@@ -1,20 +1,737 @@
-if (fotoFile) {
-            const base64 = await fotoFile.async('base64');
-            const dataUrl = 'data:image/png;base64,' + base64;
-            inputBase64.value = dataUrl;
-            imgPrev.src = dataUrl;
-            imgPrev.style.display = 'block';
-            status.textContent = '✅ Imagen del modelo .3mf extraída correctamente';
-          } else {
-            status.textContent = '⚠️ Archivo .3mf cargado, pero no contiene vista previa de imagen';
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="manifest" href='data:application/manifest+json,{"name":"Mi App","short_name":"App","start_url":".","display":"standalone","background_color":"#ffffff","theme_color":"#000000","icons":[{"src":"https://via.placeholder.com/192","sizes":"192x192","type":"image/png"}]}'>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3DPrintGo - Gestor & Calculadora 3D</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#059669">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg-dark: #f8fafc;
+      --panel-bg: #ffffff;
+      --card-bg: #f1f5f9;
+      --accent: #10b981;
+      --accent-hover: #059669;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border: #cbd5e1;
+      --success: #059669;
+      --warning: #d97706;
+      --danger: #dc2626;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    body { background-color: var(--bg-dark); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
+
+    nav {
+      background-color: var(--panel-bg);
+      border-bottom: 2px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      position: relative;
+    }
+
+    .brand { font-size: 1.3rem; font-weight: 900; color: var(--accent-hover); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+
+    .menu-toggle {
+      display: none;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: var(--text-main);
+    }
+
+    .nav-links {
+      display: flex; gap: 6px; flex: 1; max-width: 950px; justify-content: flex-end; flex-wrap: wrap;
+    }
+
+    .nav-btn {
+      min-width: 85px; background-color: var(--card-bg); border: 1px solid var(--border);
+      color: var(--text-main); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 700;
+      text-align: center; transition: all 0.2s;
+    }
+
+    .nav-btn:hover, .nav-btn.active {
+      background-color: var(--accent); color: #ffffff; border-color: var(--accent-hover);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+    }
+
+    @media (max-width: 768px) {
+      .menu-toggle { display: block; }
+      .nav-links {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background: var(--panel-bg);
+        border-bottom: 2px solid var(--border);
+        padding: 10px 16px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        z-index: 50;
+      }
+      .nav-links.mobile-open { display: flex; }
+      .nav-btn { width: 100%; text-align: left; padding: 10px 14px; }
+    }
+
+    main { flex: 1; padding: 16px; max-width: 1200px; margin: 0 auto; width: 100%; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    @media (min-width: 850px) { .grid-2 { grid-template-columns: 1.1fr 0.9fr; } }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .kpi-card { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
+    .kpi-val { font-size: 1.5rem; font-weight: 800; color: var(--accent-hover); margin-top: 4px; }
+    .kpi-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+
+    .card { background-color: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.03); }
+    .card-title {
+      font-size: 1.1rem; color: var(--accent-hover); font-weight: 700; border-bottom: 1px solid var(--border);
+      padding-bottom: 10px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+    label { font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
+    input, select, textarea {
+      background-color: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;
+      color: var(--text-main); font-size: 0.95rem; width: 100%;
+    }
+    input[type="color"] { padding: 2px; height: 40px; cursor: pointer; border-radius: 6px; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
+    .row { display: flex; gap: 10px; }
+    .row .form-group { flex: 1; }
+
+    .fil-checklist {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px; max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+    }
+    .fil-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; }
+    .fil-item input[type="checkbox"] { width: auto; cursor: pointer; }
+
+    .btn {
+      background-color: var(--accent); color: #ffffff; border: none; padding: 10px 16px; border-radius: 8px;
+      font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; display: inline-flex;
+      align-items: center; justify-content: center; gap: 8px; text-decoration: none;
+    }
+    .btn:hover { background-color: var(--accent-hover); color: white; }
+    .btn-success { background-color: var(--success); color: #ffffff; }
+    .btn-secondary { background-color: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); }
+    .btn-warning { background-color: var(--warning); color: #ffffff; }
+    .btn-danger { background-color: var(--danger); color: white; }
+    .btn-sm { padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; }
+
+    .catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+    .product-card {
+      background-color: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+      cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    }
+    .product-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16,185,129,0.15); }
+    .product-img { width: 100%; height: 160px; object-fit: cover; background: var(--card-bg); border-bottom: 1px solid var(--border); }
+    .product-body { padding: 12px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+
+    .folder-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; }
+    .folder-chip {
+      background: var(--card-bg); border: 1px solid var(--border); padding: 6px 14px; border-radius: 20px;
+      cursor: pointer; font-size: 0.8rem; font-weight: 600; white-space: nowrap; display: flex; align-items: center; gap: 6px;
+    }
+    .folder-chip.active { background: var(--accent); color: #ffffff; border-color: var(--accent-hover); }
+
+    .color-box-sample {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      border: 1px solid rgba(0,0,0,0.3);
+      display: inline-block;
+      vertical-align: middle;
+      box-shadow: inset 0 0 2px rgba(0,0,0,0.2);
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 8px; }
+    th, td { padding: 8px; text-align: right; border-bottom: 1px solid var(--border); }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.7rem; }
+
+    .modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(2px); align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+    .modal.active { display: flex; }
+    .modal-body { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 700px; max-height: 90vh; overflow-y: auto; padding: 20px; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+    .close-modal { position: absolute; top: 12px; right: 16px; font-size: 1.8rem; cursor: pointer; color: var(--text-muted); }
+
+    .extra-item-row {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="brand">🚀 3DPrintGo</div>
+    <button class="menu-toggle" onclick="toggleNavMenu()">☰ Menú</button>
+    <div class="nav-links" id="navLinks">
+      <button class="nav-btn active" onclick="switchTab('inicio', event)">🏠 Inicio</button>
+      <button class="nav-btn" onclick="switchTab('calculadora', event)">🧮 Calculadora</button>
+      <button class="nav-btn" onclick="switchTab('catalogo', event)">📦 Piezas</button>
+      <button class="nav-btn" onclick="switchTab('carpetas', event)">📁 Carpetas</button>
+      <button class="nav-btn" onclick="switchTab('filamentos', event)">🎨 Filamentos</button>
+      <button class="nav-btn" onclick="switchTab('ajustes', event)">⚙️ Ajustes</button>
+    </div>
+  </nav>
+
+  <main>
+    <!-- TAB: INICIO -->
+    <div id="tab-inicio" class="tab-content active">
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Piezas Creadas</div>
+          <div class="kpi-val" id="kpiTotalPiezas">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Carpetas</div>
+          <div class="kpi-val" id="kpiTotalEmpresas">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Filamentos Stock</div>
+          <div class="kpi-val" id="kpiTotalFilamentos">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Valor Catálogo</div>
+          <div class="kpi-val" id="kpiValorCatalogo">0.00 €</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Acceso Rápido</div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
+            <button class="btn btn-success" style="flex:1; min-width:140px;" onclick="nuevaPiezaLimpia()">🧮 Nueva Pieza</button>
+            <button class="btn btn-secondary" style="flex:1; min-width:140px;" onclick="switchTab('filamentos')">🎨 Nuevo Filamento</button>
+          </div>
+
+          <div style="background: var(--card-bg); border: 1px dashed var(--accent); padding: 12px; border-radius: 10px;">
+            <div style="font-weight:700; font-size:0.85rem; color:var(--accent-hover); margin-bottom:8px;">⚖️ Calculadora Rápida: Coste por Gramo</div>
+            <div class="row">
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:0.7rem;">Gramos</label>
+                <input type="number" id="homeGramosInput" value="1.5" step="0.1" oninput="calcularGramoHome()">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:0.7rem;">Precio Bobina (€/kg)</label>
+                <input type="number" id="homePrecioKgInput" value="16.25" step="0.05" oninput="calcularGramoHome()">
+              </div>
+            </div>
+            <div style="margin-top:8px; font-size:0.85rem; display:flex; justify-content:space-between; align-items:center;">
+              <span>Coste total material:</span>
+              <strong style="color:var(--success); font-size:1rem;" id="homeGramoResultado">0.024 € (2.44 cts)</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Últimas Piezas Guardadas</div>
+          <div id="homeRecentGrid" class="catalog-grid" style="grid-template-columns: 1fr;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: CALCULADORA -->
+    <div id="tab-calculadora" class="tab-content">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span id="calcFormTitle">1. Datos de la Pieza</span></div>
+          <input type="hidden" id="cProductoEditId">
+
+          <div class="form-group">
+            <label>Nombre / Referencia de la pieza</label>
+            <input type="text" id="cNombre" value="Tapón Colgador G" placeholder="Ej. Tapón, Pasacables...">
+          </div>
+
+          <div class="form-group">
+            <label>Carpeta Destino</label>
+            <select id="cEmpresaSel"></select>
+          </div>
+
+          <div class="form-group">
+            <label>Cargar Archivo Bambu Studio (.3mf) o Imagen</label>
+            <input type="file" id="cArch3mf" accept=".3mf, image/*" onchange="procesarArchivo3MF(event)">
+            <input type="hidden" id="cFotoBase64">
+            <div id="status3mf" style="font-size:0.8rem; color:var(--success); margin-top:4px;"></div>
+            <img id="imgPreview" style="max-height: 120px; object-fit: contain; margin-top: 8px; display: none; border-radius: 6px;">
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Peso (gramos)</label>
+              <input type="number" id="cPeso" value="1.5" step="0.1" min="0.1" oninput="calcular()">
+            </div>
+            <div class="form-group">
+              <label>Nº de Colores</label>
+              <select id="cColores" onchange="calcular()">
+                <option value="1">1 Color</option>
+                <option value="2">2 Colores (AMS)</option>
+                <option value="3">3 Colores</option>
+                <option value="4">4 Colores</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Horas Impresión</label>
+              <input type="number" id="cHoras" value="0" min="0" oninput="calcular()">
+            </div>
+            <div class="form-group">
+              <label>Minutos Impresión</label>
+              <input type="number" id="cMinutos" value="3" min="0" max="59" oninput="calcular()">
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="form-group">
+              <label>Descuento Especial (%)</label>
+              <input type="number" id="cDescuentoPct" value="0" min="0" max="100" step="1" oninput="calcular()" placeholder="Ej. 5%">
+            </div>
+            <div class="form-group">
+              <label>Fijar Precio Manual (€)</label>
+              <input type="number" id="cPrecioManual" step="0.01" oninput="calcular()" placeholder="Opcional (Ej. 0.10)">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Filamento(s) Utilizado(s)</label>
+            <div class="fil-checklist" id="cFilamentosChecklist"></div>
+          </div>
+
+          <div class="form-group" style="margin-top:15px; border-top:1px dashed var(--border); padding-top:12px;">
+            <details style="cursor:pointer;" open>
+              <summary style="font-weight:700; font-size:0.85rem; color:var(--accent-hover); margin-bottom:10px;">
+                🔩 Componentes & Sobrecostes Extra (LEDs, Tornillos, Imanes, Cables...)
+              </summary>
+              <div id="cExtrasContainer"></div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="addExtraRow()" style="margin-top:6px;">
+                ➕ Añadir Componente Extra
+              </button>
+            </details>
+          </div>
+
+          <div class="form-group" style="margin-top:10px;">
+            <label>Notas / Observaciones</label>
+            <textarea id="cNotas" rows="2" placeholder="Detalles de acabado, relleno, etc."></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">2. Desglose & Lote Personalizado</div>
+
+          <div style="background: var(--card-bg); border: 1px solid var(--border); padding: 14px; border-radius: 10px; margin-bottom: 15px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Coste Material (Base <span id="rPrecioBaseKg">20</span>€/kg):</span> <strong id="rMat">0.030 €</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Suplemento Color Extra:</span> <strong id="rColor">0.000 €</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Tiempo Máquina:</span> <strong id="rTiempo">0.000 €</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Gastos Fijos:</span> <strong id="rGastosFijos">0.000 €</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px; color:var(--accent-hover);">
+              <span>Componentes Extra (LEDs/Tornillos):</span> <strong id="rExtrasVal">0.000 €</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px; color:var(--warning);" id="rRowDesc">
+              <span>Descuento Aplicado:</span> <strong id="rDescVal">0 %</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:1.2rem; color:var(--success); border-top:1px solid var(--border); padding-top:8px;">
+              <span>Precio Final Unitario:</span> <strong id="rPrecioUnitario">0.10 €</strong>
+            </div>
+          </div>
+
+          <div class="card-title">Proyección de Lote Personalizado</div>
+          <div class="form-group">
+            <label>Cantidad Exacta Solicitada por el Cliente</label>
+            <input type="number" id="cLoteCustom" value="3500" step="100" oninput="calcular()">
+          </div>
+
+          <div style="background:var(--card-bg); border:1px solid var(--border); padding:12px; border-radius:8px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">PRECIO TOTAL LOTE</div>
+              <strong style="font-size:1.1rem; color:var(--accent-hover);" id="rLoteCustomTotal">350.00 €</strong>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:0.75rem; color:var(--text-muted);">BENEFICIO NETO</div>
+              <strong style="font-size:1.1rem; color:var(--success);" id="rLoteCustomBeneficio">+210.00 €</strong>
+            </div>
+          </div>
+
+          <div class="card-title">Escalado Estándar</div>
+          <table>
+            <thead>
+              <tr><th>Lote</th><th>Total Venta</th><th>Beneficio Neto</th></tr>
+            </thead>
+            <tbody id="tablaLotes"></tbody>
+          </table>
+
+          <div style="display:flex; gap:10px; margin-top:16px;">
+            <button class="btn btn-success" style="flex:1;" id="btnGuardarProducto" onclick="guardarEnCatalogo()">
+              💾 Guardar esta Pieza en la Nube
+            </button>
+            <button class="btn btn-secondary" id="btnCancelarEditProd" style="display:none;" onclick="resetFormCalculadora()">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: PIEZAS / CATÁLOGO -->
+    <div id="tab-catalogo" class="tab-content">
+      <div class="card">
+        <input type="text" id="catSearch" placeholder="🔍 Buscar pieza..." oninput="renderCatalogo()">
+        <div class="folder-bar" id="folderBar" style="margin-top:10px;"></div>
+      </div>
+      <div class="catalog-grid" id="catalogGrid"></div>
+    </div>
+
+    <!-- TAB: CARPETAS -->
+    <div id="tab-carpetas" class="tab-content">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span id="empFormTitle">➕ Crear Nueva Carpeta</span></div>
+          <form id="empresaForm" onsubmit="guardarEmpresa(event)">
+            <input type="hidden" id="eEmpresaEditId">
+            <div class="form-group">
+              <label>Nombre de la Carpeta / Cliente *</label>
+              <input type="text" id="eNombreEmpresa" required placeholder="Ej. General, Atlántico, Gocozi...">
+            </div>
+            <div class="form-group">
+              <label>Carpeta Padre (Opcional - Para Subcarpeta)</label>
+              <select id="ePadreSel"></select>
+            </div>
+            <div class="form-group">
+              <label>Logo / Imagen (Opcional)</label>
+              <input type="file" id="eLogoEmpresa" accept="image/*" onchange="previewLogoEmpresa(event)">
+              <input type="hidden" id="eLogoBase64">
+              <img id="imgPreviewLogo" style="max-height: 80px; object-fit: contain; margin-top: 8px; display: none; border-radius: 6px;">
+            </div>
+            <div style="display:flex; gap:10px;">
+              <button type="submit" class="btn" style="flex:1;" id="btnGuardarEmpresa">Guardar Carpeta</button>
+              <button type="button" class="btn btn-secondary" id="btnCancelarEditEmp" style="display:none;" onclick="resetFormEmpresa()">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Carpetas Registradas</div>
+          <div id="empresasGrid" class="catalog-grid" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: CATÁLOGO DE FILAMENTOS -->
+    <div id="tab-filamentos" class="tab-content">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span id="filFormTitle">➕ Registrar Nuevo Filamento</span></div>
+          <form id="filamentoForm" onsubmit="guardarFilamento(event)">
+            <input type="hidden" id="fFilamentoEditId">
+            <div class="row">
+              <div class="form-group">
+                <label>Marca *</label>
+                <input type="text" id="fMarca" required placeholder="Ej. Bambu Lab, eSUN">
+              </div>
+              <div class="form-group">
+                <label>Tipo / Formato *</label>
+                <input type="text" id="fTipo" required placeholder="Ej. PLA Basic, PLA Mate">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="form-group" style="flex: 2;">
+                <label>Nombre de Color *</label>
+                <input type="text" id="fColor" required placeholder="Ej. Ash Grey, Gris Oscuro, Rojo...">
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label>Color Visual</label>
+                <input type="color" id="fColorHex" value="#ef4444" title="Elige el tono exacto">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Precio (€/kg)</label>
+              <input type="number" id="fPrecioKg" value="20" step="0.5" required>
+            </div>
+
+            <div class="form-group">
+              <label>Enlace de Compra Web (URL)</label>
+              <input type="url" id="fUrl" placeholder="https://tienda.com/filamento...">
+            </div>
+
+            <div class="form-group">
+              <label>Foto de la Etiqueta / Bobina</label>
+              <input type="file" id="fFoto" accept="image/*" onchange="previewFotoFilamento(event)">
+              <input type="hidden" id="fFotoBase64">
+              <img id="imgPreviewFilamento" style="max-height: 100px; object-fit: contain; margin-top: 8px; display: none; border-radius: 6px;">
+            </div>
+
+            <div style="display:flex; gap:10px;">
+              <button type="submit" class="btn" style="flex:1;" id="btnGuardarFilamento">Guardar Filamento</button>
+              <button type="button" class="btn btn-secondary" id="btnCancelarEditFil" style="display:none;" onclick="resetFormFilamento()">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Mis Filamentos Registrados</div>
+          <div class="catalog-grid" id="filamentosGrid" style="grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: AJUSTES -->
+    <div id="tab-ajustes" class="tab-content">
+      <div class="card" style="max-width: 600px; margin: 0 auto;">
+        <div class="card-title">Configuración Global de Costes</div>
+        <div class="form-group">
+          <label>Precio Filamento Base Predeterminado (€/kg)</label>
+          <input type="number" id="cfgFilamento" step="1">
+        </div>
+        <div class="form-group">
+          <label>Coste Hora Máquina (€/hora)</label>
+          <input type="number" id="cfgHoraMaquina" step="0.05">
+        </div>
+        <div class="form-group">
+          <label>Suplemento Fijo Cambio Color Extra (€)</label>
+          <input type="number" id="cfgExtraColor" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>Gastos Fijos Estimados por Pieza (€)</label>
+          <input type="number" id="cfgGastosFijos" step="0.005">
+        </div>
+        <div class="form-group">
+          <label>Multiplicador de Margen (Ej. 2.0x ó 2.5x)</label>
+          <input type="number" id="cfgMultiplicador" step="0.1">
+        </div>
+        <button class="btn" onclick="guardarAjustes()">Guardar Ajustes</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL PRODUCTO -->
+  <div class="modal" id="modalProducto">
+    <div class="modal-body">
+      <span class="close-modal" onclick="closeModal()">&times;</span>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://sdpvbkzwtvmnvugjdtyu.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_Bznesuy1Ygz2cwmW_LcTsQ_n52wHT1O';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const defaultConfig = { filamento: 20, horaMaquina: 0.20, extraColor: 0.05, gastosFijos: 0.00, multiplicador: 2.0 };
+    let config = JSON.parse(localStorage.getItem('3d_cfg_v7')) || defaultConfig;
+
+    let productos = [];
+    let filamentos = [];
+    let empresas = [];
+
+    let carpetaFiltroActual = 'TODAS';
+
+    function generarUUID() {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      return 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+    }
+
+    function toggleNavMenu() {
+      const navLinks = document.getElementById('navLinks');
+      navLinks.classList.toggle('mobile-open');
+    }
+
+    async function cargarDatosDesdeNube() {
+      try {
+        const { data: emps } = await _supabase.from('empresas').select('*').order('created_at', { ascending: true });
+        empresas = emps || [];
+
+        const { data: fils } = await _supabase.from('filamentos').select('*').order('created_at', { ascending: false });
+        filamentos = fils || [];
+
+        const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
+        filamentos = filamentos.map(f => ({
+          ...f,
+          color_hex: f.color_hex || localColors[f.id] || '#808080'
+        }));
+
+        const { data: prods } = await _supabase.from('productos').select('*').order('created_at', { ascending: false });
+
+        const primeraCarpetaId = empresas.length > 0 ? empresas[0].id : '';
+        productos = (prods || []).map(p => ({
+          ...p,
+          empresaId: (p.empresa_id && p.empresa_id !== 'emp_general' && p.empresa_id !== 'null' && p.empresa_id !== '') ? p.empresa_id : primeraCarpetaId,
+          descuentoPct: p.descuento_pct || 0,
+          filamentosIds: p.filamentos_ids || [],
+          extras: p.extras || [],
+          costeTotal: p.coste_total || 0,
+          precioVenta: p.precio_venta || 0
+        }));
+
+        renderHome();
+        cargarCalculadora();
+        renderCatalogo();
+        renderFilamentos();
+        renderEmpresas();
+      } catch (e) {
+        console.error("Error al cargar datos:", e);
+      }
+    }
+
+    function switchTab(tabId, evt) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+
+      document.getElementById('tab-' + tabId).classList.add('active');
+      if (evt && evt.target) {
+        evt.target.classList.add('active');
+      } else {
+        const btn = Array.from(document.querySelectorAll('.nav-btn')).find(b => b.getAttribute('onclick')?.includes(tabId));
+        if (btn) btn.classList.add('active');
+      }
+
+      document.getElementById('navLinks').classList.remove('mobile-open');
+
+      if(tabId === 'inicio') renderHome();
+      if(tabId === 'calculadora') cargarCalculadora();
+      if(tabId === 'catalogo') renderCatalogo();
+      if(tabId === 'carpetas') renderEmpresas();
+      if(tabId === 'filamentos') renderFilamentos();
+      if(tabId === 'ajustes') cargarAjustesInputs();
+    }
+
+    function renderHome() {
+      document.getElementById('kpiTotalPiezas').textContent = productos.length;
+      document.getElementById('kpiTotalEmpresas').textContent = empresas.length;
+      document.getElementById('kpiTotalFilamentos').textContent = filamentos.length;
+
+      const totalVal = productos.reduce((sum, p) => sum + (p.precioVenta || 0), 0);
+      document.getElementById('kpiValorCatalogo').textContent = totalVal.toFixed(2) + ' €';
+
+      calcularGramoHome();
+
+      const recentGrid = document.getElementById('homeRecentGrid');
+      recentGrid.innerHTML = '';
+      const ultimos = productos.slice(0, 3);
+
+      if (ultimos.length === 0) {
+        recentGrid.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">No hay piezas registradas aún.</p>';
+        return;
+      }
+
+      ultimos.forEach(p => {
+        const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'Sin Carpeta' };
+        recentGrid.innerHTML += `
+          <div class="product-card" style="flex-direction:row; height:80px;" onclick="verFicha('${p.id}')">
+            ${p.foto ? `<img src="${p.foto}" style="width:80px; height:80px; object-fit:cover;">` : ''}
+            <div style="padding:10px; flex:1; display:flex; flex-direction:column; justify-content:center;">
+              <strong style="font-size:0.95rem;">${p.nombre}</strong>
+              <span style="font-size:0.75rem; color:var(--text-muted);">📁 ${emp.nombre}</span>
+            </div>
+            <div style="padding:10px; display:flex; align-items:center;">
+              <strong style="color:var(--success); font-size:1rem;">${(p.precioVenta || 0).toFixed(2)} €</strong>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function calcularGramoHome() {
+      const g = parseFloat(document.getElementById('homeGramosInput').value) || 0;
+      const precioKg = parseFloat(document.getElementById('homePrecioKgInput').value) || 0;
+      const costeTotalG = (g / 1000) * precioKg;
+      const cts = costeTotalG * 100;
+
+      document.getElementById('homeGramoResultado').textContent = `${costeTotalG.toFixed(3)} € (${cts.toFixed(2)} cts)`;
+    }
+
+    async function procesarArchivo3MF(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const status = document.getElementById('status3mf');
+      const imgPrev = document.getElementById('imgPreview');
+      const inputBase64 = document.getElementById('cFotoBase64');
+
+      if (file.name.endsWith('.3mf')) {
+        status.textContent = 'Procesando .3mf...';
+        try {
+          const zip = await JSZip.loadAsync(file);
+          const fotoFile = zip.file('Metadata/plate_1.png') || zip.file('Metadata/thumbnail.png');
+
+          if (fotoFile) {
+            const blob = await fotoFile.async('blob');
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+              inputBase64.value = evt.target.result;
+              imgPrev.src = evt.target.result;
+              imgPrev.style.display = 'block';
+            };
+            reader.readAsDataURL(blob);
           }
+
+          let pesoEncontrado = 0;
+          let segundosEncontrados = 0;
+
+          const sliceInfoFile = zip.file('Metadata/slice_info.config');
+          if (sliceInfoFile) {
+            const text = await sliceInfoFile.async('text');
+            const matchGramos = text.match(/used_g\s*=\s*([0-9.]+)/);
+            if (matchGramos) pesoEncontrado = parseFloat(matchGramos[1]);
+
+            const matchTiempo = text.match(/prediction\s*=\s*([0-9]+)/);
+            if (matchTiempo) segundosEncontrados = parseInt(matchTiempo[1]);
+          }
+
+          if (pesoEncontrado > 0) document.getElementById('cPeso').value = pesoEncontrado.toFixed(1);
+
+          if (segundosEncontrados > 0) {
+            const horas = Math.floor(segundosEncontrados / 3600);
+            const minutos = Math.floor((segundosEncontrados % 3600) / 60);
+            document.getElementById('cHoras').value = horas;
+            document.getElementById('cMinutos').value = minutos;
+          }
+
+          status.textContent = '✅ Archivo .3mf procesado correctamente';
+          calcular();
         } catch (err) {
-          console.error('Error al procesar .3mf:', err);
+          console.error(err);
           status.textContent = '❌ Error al leer el archivo .3mf';
         }
       } else if (file.type.startsWith('image/')) {
         const reader = new FileReader();
-        reader.onload = function (evt) {
+        reader.onload = function(evt) {
           inputBase64.value = evt.target.result;
           imgPrev.src = evt.target.result;
           imgPrev.style.display = 'block';
@@ -24,183 +741,178 @@ if (fotoFile) {
       }
     }
 
-    function addExtraRow(nombre = '', coste = 0) {
+    function addExtraRow(nombre = '', precio = 0) {
       const container = document.getElementById('cExtrasContainer');
       const div = document.createElement('div');
       div.className = 'extra-item-row';
       div.innerHTML = `
-        <div class="row">
-          <div class="form-group" style="margin-bottom:0; flex:2;">
-            <label style="font-size:0.65rem;">Nombre Componente</label>
-            <input type="text" class="extra-nombre" value="${nombre}" placeholder="Ej. Tornillo M3 x10">
-          </div>
-          <div class="form-group" style="margin-bottom:0; flex:1;">
-            <label style="font-size:0.65rem;">Coste (€)</label>
-            <input type="number" class="extra-coste" value="${coste}" step="0.01" min="0" oninput="calcular()" placeholder="0.00">
-          </div>
-          <button type="button" class="btn btn-danger btn-sm" style="align-self:flex-end; margin-bottom:2px;" onclick="removeExtraRow(this)">🗑️</button>
+        <div style="display:flex; gap:8px;">
+          <input type="text" class="extra-nombre" placeholder="Nombre componente (Ej. LED)" value="${nombre}" oninput="calcular()" style="flex:2;">
+          <input type="number" class="extra-precio" placeholder="Coste (€)" value="${precio || ''}" step="0.01" min="0" oninput="calcular()" style="flex:1;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.extra-item-row').remove(); calcular();">🗑️</button>
         </div>
       `;
       container.appendChild(div);
-      calcular();
     }
 
-    function removeExtraRow(btn) {
-      btn.closest('.extra-item-row').remove();
-      calcular();
-    }
-
-    function getExtrasValues() {
+    function getExtrasData() {
       const rows = document.querySelectorAll('.extra-item-row');
       const extras = [];
       rows.forEach(r => {
-        const nombre = r.querySelector('.extra-nombre').value.trim();
-        const coste = parseFloat(r.querySelector('.extra-coste').value) || 0;
-        if (nombre || coste > 0) {
-          extras.push({ nombre, coste });
+        const nom = r.querySelector('.extra-nombre').value.trim();
+        const prec = parseFloat(r.querySelector('.extra-precio').value) || 0;
+        if (nom || prec > 0) {
+          extras.push({ nombre: nom, precio: prec });
         }
       });
       return extras;
     }
 
     function cargarCalculadora() {
-      const selectEmp = document.getElementById('cEmpresaSel');
-      selectEmp.innerHTML = '';
+      const empSel = document.getElementById('cEmpresaSel');
+      empSel.innerHTML = '';
       empresas.forEach(e => {
-        selectEmp.innerHTML += `<option value="${e.id}">${e.nombre}</option>`;
+        empSel.innerHTML += `<option value="${e.id}">${e.nombre}</option>`;
       });
 
-      const checklist = document.getElementById('cFilamentosChecklist');
-      checklist.innerHTML = '';
+      const filChecklist = document.getElementById('cFilamentosChecklist');
+      filChecklist.innerHTML = '';
       if (filamentos.length === 0) {
-        checklist.innerHTML = '<span style="font-size:0.8rem; color:var(--text-muted);">No hay filamentos guardados.</span>';
+        filChecklist.innerHTML = '<span style="font-size:0.8rem; color:var(--text-muted);">No hay filamentos guardados.</span>';
       } else {
         filamentos.forEach(f => {
-          checklist.innerHTML += `
+          filChecklist.innerHTML += `
             <label class="fil-item">
-              <input type="checkbox" value="${f.id}" class="fil-check" onchange="calcular()">
-              <span class="color-box-sample" style="background-color: ${f.color_hex || '#808080'};"></span>
-              <span><strong>${f.marca}</strong> ${f.tipo} - ${f.color} (${f.precio_kg}€/kg)</span>
+              <input type="checkbox" value="${f.id}" onchange="calcular()">
+              <span class="color-box-sample" style="background-color:${f.color_hex}"></span>
+              <span>${f.marca} ${f.tipo} - ${f.color} (${f.precio_kg} €/kg)</span>
             </label>
           `;
         });
       }
 
+      document.getElementById('rPrecioBaseKg').textContent = config.filamento;
       calcular();
     }
 
     function calcular() {
       const peso = parseFloat(document.getElementById('cPeso').value) || 0;
-      const colores = parseInt(document.getElementById('cColores').value) || 1;
+      const numColores = parseInt(document.getElementById('cColores').value) || 1;
       const horas = parseFloat(document.getElementById('cHoras').value) || 0;
       const minutos = parseFloat(document.getElementById('cMinutos').value) || 0;
       const descuentoPct = parseFloat(document.getElementById('cDescuentoPct').value) || 0;
-      const precioManual = parseFloat(document.getElementById('cPrecioManual').value) || 0;
-      const loteCustom = parseInt(document.getElementById('cLoteCustom').value) || 1;
+      const precioManualInput = parseFloat(document.getElementById('cPrecioManual').value);
 
-      const selectedFilIds = Array.from(document.querySelectorAll('.fil-check:checked')).map(c => c.value);
-      const selectedFilamentos = filamentos.filter(f => selectedFilIds.includes(f.id));
+      const checkboxes = document.querySelectorAll('#cFilamentosChecklist input[type="checkbox"]:checked');
+      let precioKgBase = config.filamento;
 
-      let precioKgPromedio = config.filamento;
-      if (selectedFilamentos.length > 0) {
-        const sumaPrecios = selectedFilamentos.reduce((s, f) => s + (parseFloat(f.precio_kg) || config.filamento), 0);
-        precioKgPromedio = sumaPrecios / selectedFilamentos.length;
+      if (checkboxes.length > 0) {
+        let sumaPrecios = 0;
+        checkboxes.forEach(cb => {
+          const fil = filamentos.find(f => f.id === cb.value);
+          if (fil) sumaPrecios += parseFloat(fil.precio_kg || config.filamento);
+        });
+        precioKgBase = sumaPrecios / checkboxes.length;
       }
 
-      document.getElementById('rPrecioBaseKg').textContent = precioKgPromedio.toFixed(2);
+      document.getElementById('rPrecioBaseKg').textContent = precioKgBase.toFixed(2);
 
-      const costeMat = (peso / 1000) * precioKgPromedio;
-      const suplementoColor = (colores - 1) * config.extraColor;
+      const costeMaterial = (peso / 1000) * precioKgBase;
+      const suplementoColor = (numColores - 1) * config.extraColor;
       const tiempoTotalHoras = horas + (minutos / 60);
       const costeTiempo = tiempoTotalHoras * config.horaMaquina;
       const gastosFijos = config.gastosFijos;
 
-      const extras = getExtrasValues();
-      const costeExtras = extras.reduce((sum, item) => sum + item.coste, 0);
+      const extras = getExtrasData();
+      const costeExtras = extras.reduce((sum, item) => sum + item.precio, 0);
 
-      const costeBaseTotal = costeMat + suplementoColor + costeTiempo + gastosFijos + costeExtras;
+      const costeTotalDirecto = costeMaterial + suplementoColor + costeTiempo + gastosFijos + costeExtras;
 
-      let precioVentaFinal = costeBaseTotal * config.multiplicador;
+      let precioUnitarioVenta = 0;
 
-      if (descuentoPct > 0) {
-        precioVentaFinal = precioVentaFinal * (1 - (descuentoPct / 100));
+      if (!isNaN(precioManualInput) && precioManualInput > 0) {
+        precioUnitarioVenta = precioManualInput;
+      } else {
+        const precioBaseConMargen = costeTotalDirecto * config.multiplicador;
+        precioUnitarioVenta = precioBaseConMargen * (1 - (descuentoPct / 100));
       }
 
-      if (precioManual > 0) {
-        precioVentaFinal = precioManual;
-      }
-
-      document.getElementById('rMat').textContent = costeMat.toFixed(3) + ' €';
+      document.getElementById('rMat').textContent = costeMaterial.toFixed(3) + ' €';
       document.getElementById('rColor').textContent = suplementoColor.toFixed(3) + ' €';
       document.getElementById('rTiempo').textContent = costeTiempo.toFixed(3) + ' €';
       document.getElementById('rGastosFijos').textContent = gastosFijos.toFixed(3) + ' €';
       document.getElementById('rExtrasVal').textContent = costeExtras.toFixed(3) + ' €';
       document.getElementById('rDescVal').textContent = descuentoPct + ' %';
-      document.getElementById('rPrecioUnitario').textContent = precioVentaFinal.toFixed(2) + ' €';
+      document.getElementById('rPrecioUnitario').textContent = precioUnitarioVenta.toFixed(2) + ' €';
 
-      const totalLoteCustom = precioVentaFinal * loteCustom;
-      const beneficioLoteCustom = (precioVentaFinal - costeBaseTotal) * loteCustom;
+      const customCant = parseInt(document.getElementById('cLoteCustom').value) || 1;
+      const totalCustomVenta = customCant * precioUnitarioVenta;
+      const totalCustomCoste = customCant * costeTotalDirecto;
+      const beneficioCustom = totalCustomVenta - totalCustomCoste;
 
-      document.getElementById('rLoteCustomTotal').textContent = totalLoteCustom.toFixed(2) + ' €';
-      document.getElementById('rLoteCustomBeneficio').textContent = (beneficioLoteCustom >= 0 ? '+' : '') + beneficioLoteCustom.toFixed(2) + ' €';
+      document.getElementById('rLoteCustomTotal').textContent = totalCustomVenta.toFixed(2) + ' €';
+      document.getElementById('rLoteCustomBeneficio').textContent = (beneficioCustom >= 0 ? '+' : '') + beneficioCustom.toFixed(2) + ' €';
 
-      const tabla = document.getElementById('tablaLotes');
-      tabla.innerHTML = '';
-      const lotesStandard = [10, 50, 100, 500, 1000];
-
-      lotesStandard.forEach(cant => {
-        const totalVenta = precioVentaFinal * cant;
-        const beneficio = (precioVentaFinal - costeBaseTotal) * cant;
-        tabla.innerHTML += `
+      const tablaLotes = document.getElementById('tablaLotes');
+      tablaLotes.innerHTML = '';
+      [10, 50, 100, 500, 1000].forEach(lote => {
+        const totalVenta = lote * precioUnitarioVenta;
+        const totalCoste = lote * costeTotalDirecto;
+        const beneficio = totalVenta - totalCoste;
+        tablaLotes.innerHTML += `
           <tr>
-            <td>${cant} uds</td>
-            <td><strong>${totalVenta.toFixed(2)} €</strong></td>
-            <td style="color:var(--success);">+${beneficio.toFixed(2)} €</td>
+            <td><strong>${lote} ud</strong></td>
+            <td>${totalVenta.toFixed(2)} €</td>
+            <td style="color:var(--success); font-weight:700;">+${beneficio.toFixed(2)} €</td>
           </tr>
         `;
       });
     }
 
     async function guardarEnCatalogo() {
-      const idEdit = document.getElementById('cProductoEditId').value;
+      const editId = document.getElementById('cProductoEditId').value;
       const nombre = document.getElementById('cNombre').value.trim();
+      if (!nombre) return alert('Debes indicar un nombre para la pieza.');
+
       const empresaId = document.getElementById('cEmpresaSel').value;
       const peso = parseFloat(document.getElementById('cPeso').value) || 0;
       const colores = parseInt(document.getElementById('cColores').value) || 1;
-      const horas = parseFloat(document.getElementById('cHoras').value) || 0;
-      const minutos = parseFloat(document.getElementById('cMinutos').value) || 0;
+      const horas = parseInt(document.getElementById('cHoras').value) || 0;
+      const minutos = parseInt(document.getElementById('cMinutos').value) || 0;
       const descuentoPct = parseFloat(document.getElementById('cDescuentoPct').value) || 0;
-      const precioManual = parseFloat(document.getElementById('cPrecioManual').value) || 0;
       const foto = document.getElementById('cFotoBase64').value;
       const notas = document.getElementById('cNotas').value;
 
-      if (!nombre) {
-        alert('Debes introducir un nombre para la pieza');
-        return;
+      const checkedFils = Array.from(document.querySelectorAll('#cFilamentosChecklist input[type="checkbox"]:checked')).map(cb => cb.value);
+      const extras = getExtrasData();
+
+      let precioKgBase = config.filamento;
+      if (checkedFils.length > 0) {
+        let sumaPrecios = 0;
+        checkedFils.forEach(fid => {
+          const fil = filamentos.find(f => f.id === fid);
+          if (fil) sumaPrecios += parseFloat(fil.precio_kg || config.filamento);
+        });
+        precioKgBase = sumaPrecios / checkedFils.length;
       }
 
-      const filamentosIds = Array.from(document.querySelectorAll('.fil-check:checked')).map(c => c.value);
-      const extras = getExtrasValues();
-
-      const selectedFilamentos = filamentos.filter(f => filamentosIds.includes(f.id));
-      let precioKgPromedio = config.filamento;
-      if (selectedFilamentos.length > 0) {
-        const sumaPrecios = selectedFilamentos.reduce((s, f) => s + (parseFloat(f.precio_kg) || config.filamento), 0);
-        precioKgPromedio = sumaPrecios / selectedFilamentos.length;
-      }
-
-      const costeMat = (peso / 1000) * precioKgPromedio;
+      const costeMaterial = (peso / 1000) * precioKgBase;
       const suplementoColor = (colores - 1) * config.extraColor;
-      const costeTiempo = (horas + (minutos / 60)) * config.horaMaquina;
-      const costeExtras = extras.reduce((sum, item) => sum + item.coste, 0);
+      const costeTiempo = (horas + minutos/60) * config.horaMaquina;
+      const costeExtras = extras.reduce((sum, item) => sum + item.precio, 0);
 
-      const costeTotal = costeMat + suplementoColor + costeTiempo + config.gastosFijos + costeExtras;
+      const costeTotal = costeMaterial + suplementoColor + costeTiempo + config.gastosFijos + costeExtras;
 
-      let precioVenta = costeTotal * config.multiplicador;
-      if (descuentoPct > 0) precioVenta = precioVenta * (1 - (descuentoPct / 100));
-      if (precioManual > 0) precioVenta = precioManual;
+      const precioManualInput = parseFloat(document.getElementById('cPrecioManual').value);
+      let precioVenta = 0;
+      if (!isNaN(precioManualInput) && precioManualInput > 0) {
+        precioVenta = precioManualInput;
+      } else {
+        precioVenta = (costeTotal * config.multiplicador) * (1 - (descuentoPct / 100));
+      }
 
-      const prodData = {
+      const payload = {
+        id: editId || generarUUID(),
         nombre,
         empresa_id: empresaId,
         peso,
@@ -208,32 +920,48 @@ if (fotoFile) {
         horas,
         minutos,
         descuento_pct: descuentoPct,
-        precio_manual: precioManual,
-        filamentos_ids: filamentosIds,
+        foto,
+        notas,
+        filamentos_ids: checkedFils,
         extras,
         coste_total: costeTotal,
-        precio_venta: precioVenta,
-        foto,
-        notas
+        precio_venta: precioVenta
       };
 
       try {
-        if (idEdit) {
-          const { error } = await _supabase.from('productos').update(prodData).eq('id', idEdit);
-          if (error) throw error;
-        } else {
-          const { error } = await _supabase.from('productos').insert([{ id: generarUUID(), ...prodData }]);
-          if (error) throw error;
-        }
+        const { error } = await _supabase.from('productos').upsert(payload);
+        if (error) throw error;
 
-        alert('✅ Pieza guardada con éxito en la nube');
+        alert('✅ Pieza guardada correctamente');
         resetFormCalculadora();
         await cargarDatosDesdeNube();
         switchTab('catalogo');
       } catch (err) {
-        console.error('Error al guardar pieza:', err);
-        alert('❌ Error al guardar la pieza en Supabase');
+        console.error(err);
+        alert('❌ Error al guardar en Supabase');
       }
+    }
+
+    function resetFormCalculadora() {
+      document.getElementById('cProductoEditId').value = '';
+      document.getElementById('cNombre').value = '';
+      document.getElementById('cFotoBase64').value = '';
+      document.getElementById('imgPreview').style.display = 'none';
+      document.getElementById('status3mf').textContent = '';
+      document.getElementById('cPeso').value = '1.5';
+      document.getElementById('cColores').value = '1';
+      document.getElementById('cHoras').value = '0';
+      document.getElementById('cMinutos').value = '3';
+      document.getElementById('cDescuentoPct').value = '0';
+      document.getElementById('cPrecioManual').value = '';
+      document.getElementById('cNotas').value = '';
+      document.getElementById('cExtrasContainer').innerHTML = '';
+      document.getElementById('cArch3mf').value = '';
+
+      document.getElementById('calcFormTitle').textContent = '1. Datos de la Pieza';
+      document.getElementById('btnCancelarEditProd').style.display = 'none';
+
+      cargarCalculadora();
     }
 
     function nuevaPiezaLimpia() {
@@ -241,107 +969,26 @@ if (fotoFile) {
       switchTab('calculadora');
     }
 
-    function resetFormCalculadora() {
-      document.getElementById('cProductoEditId').value = '';
-      document.getElementById('calcFormTitle').textContent = '1. Datos de la Pieza';
-      document.getElementById('cNombre').value = '';
-      document.getElementById('cPeso').value = '10';
-      document.getElementById('cColores').value = '1';
-      document.getElementById('cHoras').value = '0';
-      document.getElementById('cMinutos').value = '30';
-      document.getElementById('cDescuentoPct').value = '0';
-      document.getElementById('cPrecioManual').value = '';
-      document.getElementById('cArch3mf').value = '';
-      document.getElementById('cFotoBase64').value = '';
-      document.getElementById('status3mf').textContent = '';
-      document.getElementById('imgPreview').style.display = 'none';
-      document.getElementById('cNotas').value = '';
-      document.getElementById('cExtrasContainer').innerHTML = '';
-      document.getElementById('btnCancelarEditProd').style.display = 'none';
-
-      const checks = document.querySelectorAll('.fil-check');
-      checks.forEach(c => c.checked = false);
-
-      calcular();
-    }
-
-    function editarProducto(id) {
-      const p = productos.find(prod => prod.id === id);
-      if (!p) return;
-
-      document.getElementById('cProductoEditId').value = p.id;
-      document.getElementById('calcFormTitle').textContent = '✏️ Editando: ' + p.nombre;
-      document.getElementById('cNombre').value = p.nombre || '';
-      document.getElementById('cEmpresaSel').value = p.empresaId || '';
-      document.getElementById('cPeso').value = p.peso || 0;
-      document.getElementById('cColores').value = p.colores || 1;
-      document.getElementById('cHoras').value = p.horas || 0;
-      document.getElementById('cMinutos').value = p.minutos || 0;
-      document.getElementById('cDescuentoPct').value = p.descuentoPct || 0;
-      document.getElementById('cPrecioManual').value = p.precio_manual || '';
-      document.getElementById('cFotoBase64').value = p.foto || '';
-      document.getElementById('cNotas').value = p.notas || '';
-
-      if (p.foto) {
-        document.getElementById('imgPreview').src = p.foto;
-        document.getElementById('imgPreview').style.display = 'block';
-      } else {
-        document.getElementById('imgPreview').style.display = 'none';
-      }
-
-      const checks = document.querySelectorAll('.fil-check');
-      checks.forEach(c => {
-        c.checked = (p.filamentosIds || []).includes(c.value);
-      });
-
-      const container = document.getElementById('cExtrasContainer');
-      container.innerHTML = '';
-      if (p.extras && Array.isArray(p.extras)) {
-        p.extras.forEach(ext => addExtraRow(ext.nombre, ext.coste));
-      }
-
-      document.getElementById('btnCancelarEditProd').style.display = 'inline-block';
-      closeModal();
-      switchTab('calculadora');
-    }
-
-    async function eliminarProducto(id) {
-      if (!confirm('¿Seguro que deseas eliminar esta pieza?')) return;
-      try {
-        const { error } = await _supabase.from('productos').delete().eq('id', id);
-        if (error) throw error;
-        closeModal();
-        await cargarDatosDesdeNube();
-      } catch (err) {
-        console.error('Error al borrar producto:', err);
-        alert('❌ Error al borrar el producto');
-      }
-    }
-
     function renderCatalogo() {
-      const busqueda = document.getElementById('catSearch').value.toLowerCase();
+      const query = document.getElementById('catSearch').value.toLowerCase();
       const folderBar = document.getElementById('folderBar');
-      folderBar.innerHTML = `<div class="folder-chip ${carpetaFiltroActual === 'TODAS' ? 'active' : ''}" onclick="filtrarPorCarpeta('TODAS')">📁 Todas</div>`;
+      const catalogGrid = document.getElementById('catalogGrid');
 
+      folderBar.innerHTML = `<div class="folder-chip ${carpetaFiltroActual === 'TODAS' ? 'active' : ''}" onclick="filtrarCarpeta('TODAS')">📁 Todas</div>`;
       empresas.forEach(e => {
-        folderBar.innerHTML += `
-          <div class="folder-chip ${carpetaFiltroActual === e.id ? 'active' : ''}" onclick="filtrarPorCarpeta('${e.id}')">
-            📁 ${e.nombre}
-          </div>
-        `;
+        folderBar.innerHTML += `<div class="folder-chip ${carpetaFiltroActual === e.id ? 'active' : ''}" onclick="filtrarCarpeta('${e.id}')">📁 ${e.nombre}</div>`;
       });
 
-      const catalogGrid = document.getElementById('catalogGrid');
       catalogGrid.innerHTML = '';
 
       const filtrados = productos.filter(p => {
-        const coincideNombre = p.nombre.toLowerCase().includes(busqueda);
+        const coincideQuery = p.nombre.toLowerCase().includes(query);
         const coincideCarpeta = (carpetaFiltroActual === 'TODAS') || (p.empresaId === carpetaFiltroActual);
-        return coincideNombre && coincideCarpeta;
+        return coincideQuery && coincideCarpeta;
       });
 
       if (filtrados.length === 0) {
-        catalogGrid.innerHTML = '<p style="color:var(--text-muted); grid-column: 1/-1;">No se encontraron piezas en este filtro.</p>';
+        catalogGrid.innerHTML = '<p style="color:var(--text-muted); font-size:0.9rem;">No se encontraron piezas.</p>';
         return;
       }
 
@@ -349,13 +996,13 @@ if (fotoFile) {
         const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'Sin Carpeta' };
         catalogGrid.innerHTML += `
           <div class="product-card" onclick="verFicha('${p.id}')">
-            ${p.foto ? `<img src="${p.foto}" class="product-img">` : `<div class="product-img" style="display:flex; align-items:center; justify-content:center; font-size:2rem; color:var(--text-muted);">📦</div>`}
+            ${p.foto ? `<img src="${p.foto}" class="product-img">` : `<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:var(--text-muted);">Sin foto</div>`}
             <div class="product-body">
               <div>
                 <strong style="font-size:1rem; display:block; margin-bottom:4px;">${p.nombre}</strong>
                 <span style="font-size:0.75rem; color:var(--text-muted);">📁 ${emp.nombre}</span>
               </div>
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+              <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:0.8rem; color:var(--text-muted);">${p.peso}g | ${p.horas}h ${p.minutos}m</span>
                 <strong style="color:var(--success); font-size:1.1rem;">${(p.precioVenta || 0).toFixed(2)} €</strong>
               </div>
@@ -365,7 +1012,7 @@ if (fotoFile) {
       });
     }
 
-    function filtrarPorCarpeta(empId) {
+    function filtrarCarpeta(empId) {
       carpetaFiltroActual = empId;
       renderCatalogo();
     }
@@ -377,44 +1024,45 @@ if (fotoFile) {
       const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'Sin Carpeta' };
       const modalContent = document.getElementById('modalContent');
 
-      const filsUsados = filamentos.filter(f => (p.filamentosIds || []).includes(f.id));
-      const listaFilsHTML = filsUsados.length > 0
-        ? filsUsados.map(f => `<li><span class="color-box-sample" style="background-color:${f.color_hex}"></span> ${f.marca} ${f.tipo} - ${f.color}</li>`).join('')
-        : '<li>Sin filamentos asignados especificamente</li>';
+      let filsHtml = '';
+      if (p.filamentosIds && p.filamentosIds.length > 0) {
+        filsHtml = p.filamentosIds.map(fid => {
+          const f = filamentos.find(item => item.id === fid);
+          if (!f) return '';
+          const btnComprar = f.url ? `<a href="${f.url}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none; padding:2px 6px; font-size:0.75rem;">🛒 Comprar</a>` : '';
+          return `<div style="display:flex; align-items:center; justify-content:space-between; background:var(--card-bg); padding:6px 10px; border-radius:6px; margin-bottom:4px; font-size:0.85rem;">
+            <span style="display:inline-flex; align-items:center; gap:6px;">
+              <span class="color-box-sample" style="background:${f.color_hex}; width:14px; height:14px;"></span>
+              <strong>${f.marca} ${f.tipo}</strong> - ${f.color} (${f.precio_kg} €/kg)
+            </span>
+            ${btnComprar}
+          </div>`;
+        }).join('');
+      }
 
-      const listaExtrasHTML = (p.extras && p.extras.length > 0)
-        ? p.extras.map(e => `<li>${e.nombre}: <strong>${e.coste.toFixed(2)} €</strong></li>`).join('')
-        : '<li>Sin componentes extras</li>';
+      let extrasHtml = '';
+      if (p.extras && p.extras.length > 0) {
+        extrasHtml = p.extras.map(ex => `<li>${ex.nombre}: <strong>${ex.precio.toFixed(2)} €</strong></li>`).join('');
+      }
 
       modalContent.innerHTML = `
-        <h2 style="color:var(--accent-hover); margin-bottom:10px;">${p.nombre}</h2>
-        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:15px;">📁 Carpeta: <strong>${emp.nombre}</strong></p>
-
-        ${p.foto ? `<img src="${p.foto}" style="width:100%; max-height:250px; object-fit:contain; border-radius:8px; background:var(--card-bg); margin-bottom:15px;">` : ''}
-
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px; background:var(--card-bg); padding:12px; border-radius:8px;">
-          <div><strong>Peso:</strong> ${p.peso} g</div>
-          <div><strong>Colores:</strong> ${p.colores}</div>
-          <div><strong>Tiempo:</strong> ${p.horas}h ${p.minutos}m</div>
-          <div><strong>Descuento:</strong> ${p.descuentoPct || 0}%</div>
-          <div><strong>Coste Producción:</strong> ${(p.costeTotal || 0).toFixed(2)} €</div>
-          <div><strong>Precio Venta Unitario:</strong> <span style="color:var(--success); font-weight:800;">${(p.precioVenta || 0).toFixed(2)} €</span></div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+          ${p.foto ? `<img src="${p.foto}" style="max-width:200px; max-height:200px; border-radius:8px; object-fit:cover;">` : ''}
+          <div style="flex:1;">
+            <h2>${p.nombre}</h2>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:8px;">📁 Carpeta: ${emp.nombre}</p>
+            <p style="font-size:1.2rem; color:var(--success); font-weight:800; margin-bottom:12px;">Precio Unitario: ${(p.precioVenta || 0).toFixed(2)} €</p>
+            <p style="font-size:0.85rem;"><strong>Peso:</strong> ${p.peso} g | <strong>Tiempo:</strong> ${p.horas}h ${p.minutos}m</p>
+            <p style="font-size:0.85rem;"><strong>Colores:</strong> ${p.colores}</p>
+          </div>
         </div>
 
-        <div style="margin-bottom:15px;">
-          <strong>🎨 Filamentos Utilizados:</strong>
-          <ul style="margin-left:20px; font-size:0.85rem; margin-top:5px;">${listaFilsHTML}</ul>
-        </div>
-
-        <div style="margin-bottom:15px;">
-          <strong>🔩 Componentes / Extras:</strong>
-          <ul style="margin-left:20px; font-size:0.85rem; margin-top:5px;">${listaExtrasHTML}</ul>
-        </div>
-
-        ${p.notas ? `<div style="margin-bottom:15px; font-size:0.85rem; background:#fff; padding:10px; border:1px solid var(--border); border-radius:6px;"><strong>Notas:</strong><p>${p.notas}</p></div>` : ''}
+        ${filsHtml ? `<div style="margin-bottom:12px;"><strong>Filamentos utilizados:</strong><div style="margin-top:6px;">${filsHtml}</div></div>` : ''}
+        ${extrasHtml ? `<div style="margin-bottom:12px;"><strong>Componentes Extra:</strong><ul>${extrasHtml}</ul></div>` : ''}
+        ${p.notas ? `<div style="margin-bottom:16px; background:var(--card-bg); padding:10px; border-radius:6px; font-size:0.85rem;"><strong>Notas:</strong> ${p.notas}</div>` : ''}
 
         <div style="display:flex; gap:10px; margin-top:20px;">
-          <button class="btn btn-warning" style="flex:1;" onclick="editarProducto('${p.id}')">✏️ Editar Pieza</button>
+          <button class="btn btn-warning" onclick="editarProducto('${p.id}')">✏️ Editar Pieza</button>
           <button class="btn btn-danger" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
         </div>
       `;
@@ -426,136 +1074,171 @@ if (fotoFile) {
       document.getElementById('modalProducto').classList.remove('active');
     }
 
+    function editarProducto(id) {
+      const p = productos.find(prod => prod.id === id);
+      if (!p) return;
+
+      closeModal();
+      switchTab('calculadora');
+
+      document.getElementById('cProductoEditId').value = p.id;
+      document.getElementById('cNombre').value = p.nombre;
+      document.getElementById('cEmpresaSel').value = p.empresaId;
+      document.getElementById('cPeso').value = p.peso;
+      document.getElementById('cColores').value = p.colores;
+      document.getElementById('cHoras').value = p.horas;
+      document.getElementById('cMinutos').value = p.minutos;
+      document.getElementById('cDescuentoPct').value = p.descuentoPct || 0;
+      document.getElementById('cNotas').value = p.notas || '';
+
+      if (p.foto) {
+        document.getElementById('cFotoBase64').value = p.foto;
+        const imgPrev = document.getElementById('imgPreview');
+        imgPrev.src = p.foto;
+        imgPrev.style.display = 'block';
+      }
+
+      document.getElementById('cExtrasContainer').innerHTML = '';
+      if (p.extras && p.extras.length > 0) {
+        p.extras.forEach(ex => addExtraRow(ex.nombre, ex.precio));
+      }
+
+      const cbs = document.querySelectorAll('#cFilamentosChecklist input[type="checkbox"]');
+      cbs.forEach(cb => {
+        cb.checked = p.filamentosIds && p.filamentosIds.includes(cb.value);
+      });
+
+      document.getElementById('calcFormTitle').textContent = '✏️ Editando Pieza';
+      document.getElementById('btnCancelarEditProd').style.display = 'inline-flex';
+
+      calcular();
+    }
+
+    async function eliminarProducto(id) {
+      if (!confirm('¿Seguro que deseas eliminar esta pieza?')) return;
+      try {
+        const { error } = await _supabase.from('productos').delete().eq('id', id);
+        if (error) throw error;
+        closeModal();
+        await cargarDatosDesdeNube();
+      } catch (err) {
+        console.error(err);
+        alert('❌ Error al eliminar de Supabase');
+      }
+    }
+
     function previewLogoEmpresa(e) {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = function (evt) {
+      reader.onload = function(evt) {
         document.getElementById('eLogoBase64').value = evt.target.result;
-        const img = document.getElementById('imgPreviewLogo');
-        img.src = evt.target.result;
-        img.style.display = 'block';
+        const imgPrev = document.getElementById('imgPreviewLogo');
+        imgPrev.src = evt.target.result;
+        imgPrev.style.display = 'block';
       };
       reader.readAsDataURL(file);
     }
 
     async function guardarEmpresa(e) {
       e.preventDefault();
-      const idEdit = document.getElementById('eEmpresaEditId').value;
+      const id = document.getElementById('eEmpresaEditId').value || generarUUID();
       const nombre = document.getElementById('eNombreEmpresa').value.trim();
       const padreId = document.getElementById('ePadreSel').value || null;
       const logo = document.getElementById('eLogoBase64').value;
 
-      if (!nombre) return;
-
-      const empData = { nombre, padre_id: padreId, logo };
-
       try {
-        if (idEdit) {
-          const { error } = await _supabase.from('empresas').update(empData).eq('id', idEdit);
-          if (error) throw error;
-        } else {
-          const { error } = await _supabase.from('empresas').insert([{ id: generarUUID(), ...empData }]);
-          if (error) throw error;
-        }
+        const { error } = await _supabase.from('empresas').upsert({ id, nombre, padre_id: padreId, logo });
+        if (error) throw error;
 
         resetFormEmpresa();
         await cargarDatosDesdeNube();
       } catch (err) {
-        console.error('Error al guardar carpeta:', err);
+        console.error(err);
         alert('❌ Error al guardar la carpeta');
       }
     }
 
     function resetFormEmpresa() {
       document.getElementById('eEmpresaEditId').value = '';
-      document.getElementById('empFormTitle').textContent = '➕ Crear Nueva Carpeta';
       document.getElementById('eNombreEmpresa').value = '';
-      document.getElementById('eLogoEmpresa').value = '';
       document.getElementById('eLogoBase64').value = '';
       document.getElementById('imgPreviewLogo').style.display = 'none';
+      document.getElementById('eLogoEmpresa').value = '';
+      document.getElementById('empFormTitle').textContent = '➕ Crear Nueva Carpeta';
       document.getElementById('btnCancelarEditEmp').style.display = 'none';
     }
 
-    function editarEmpresa(id) {
-      const e = empresas.find(emp => emp.id === id);
-      if (!e) return;
-
-      document.getElementById('eEmpresaEditId').value = e.id;
-      document.getElementById('empFormTitle').textContent = '✏️ Editando Carpeta: ' + e.nombre;
-      document.getElementById('eNombreEmpresa').value = e.nombre;
-      document.getElementById('ePadreSel').value = e.padre_id || '';
-      document.getElementById('eLogoBase64').value = e.logo || '';
-
-      if (e.logo) {
-        document.getElementById('imgPreviewLogo').src = e.logo;
-        document.getElementById('imgPreviewLogo').style.display = 'block';
-      } else {
-        document.getElementById('imgPreviewLogo').style.display = 'none';
-      }
-
-      document.getElementById('btnCancelarEditEmp').style.display = 'inline-block';
-    }
-
-    async function eliminarEmpresa(id) {
-      if (!confirm('¿Seguro que deseas borrar esta carpeta? Las piezas asignadas quedarán sin carpeta.')) return;
-      try {
-        const { error } = await _supabase.from('empresas').delete().eq('id', id);
-        if (error) throw error;
-        await cargarDatosDesdeNube();
-      } catch (err) {
-        console.error('Error al borrar carpeta:', err);
-        alert('❌ Error al eliminar la carpeta');
-      }
-    }
-
     function renderEmpresas() {
-      const padreSel = document.getElementById('ePadreSel');
-      padreSel.innerHTML = '<option value="">-- Ninguna (Carpeta Raíz) --</option>';
-      empresas.forEach(e => {
-        padreSel.innerHTML += `<option value="${e.id}">${e.nombre}</option>`;
-      });
-
       const grid = document.getElementById('empresasGrid');
+      const padreSel = document.getElementById('ePadreSel');
+
+      padreSel.innerHTML = '<option value="">-- Ninguna (Carpeta Raíz) --</option>';
       grid.innerHTML = '';
 
-      if (empresas.length === 0) {
-        grid.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">No hay carpetas creadas.</p>';
-        return;
-      }
+      empresas.forEach(emp => {
+        padreSel.innerHTML += `<option value="${emp.id}">${emp.nombre}</option>`;
 
-      empresas.forEach(e => {
-        const cantProds = productos.filter(p => p.empresaId === e.id).length;
         grid.innerHTML += `
           <div class="product-card" style="padding:12px; align-items:center; text-align:center;">
-            ${e.logo ? `<img src="${e.logo}" style="width:50px; height:50px; object-fit:contain; margin-bottom:8px;">` : `<div style="font-size:2rem; margin-bottom:8px;">📁</div>`}
-            <strong style="font-size:0.9rem; margin-bottom:4px;">${e.nombre}</strong>
-            <span style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">${cantProds} piezas</span>
-            <div style="display:flex; gap:6px; width:100%;">
-              <button class="btn btn-warning btn-sm" style="flex:1;" onclick="editarEmpresa('${e.id}')">✏️</button>
-              <button class="btn btn-danger btn-sm" onclick="eliminarEmpresa('${e.id}')">🗑️</button>
+            ${emp.logo ? `<img src="${emp.logo}" style="width:50px; height:50px; object-fit:contain; margin-bottom:8px;">` : '<div style="font-size:2rem; margin-bottom:8px;">📁</div>'}
+            <strong>${emp.nombre}</strong>
+            <div style="display:flex; gap:6px; margin-top:10px;">
+              <button class="btn btn-warning btn-sm" onclick="editarEmpresa('${emp.id}')">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="eliminarEmpresa('${emp.id}')">🗑️</button>
             </div>
           </div>
         `;
       });
     }
 
+    function editarEmpresa(id) {
+      const emp = empresas.find(e => e.id === id);
+      if (!emp) return;
+
+      document.getElementById('eEmpresaEditId').value = emp.id;
+      document.getElementById('eNombreEmpresa').value = emp.nombre;
+      document.getElementById('ePadreSel').value = emp.padre_id || '';
+
+      if (emp.logo) {
+        document.getElementById('eLogoBase64').value = emp.logo;
+        const imgPrev = document.getElementById('imgPreviewLogo');
+        imgPrev.src = emp.logo;
+        imgPrev.style.display = 'block';
+      }
+
+      document.getElementById('empFormTitle').textContent = '✏️ Editar Carpeta';
+      document.getElementById('btnCancelarEditEmp').style.display = 'inline-flex';
+    }
+
+    async function eliminarEmpresa(id) {
+      if (!confirm('¿Seguro que deseas eliminar esta carpeta?')) return;
+      try {
+        const { error } = await _supabase.from('empresas').delete().eq('id', id);
+        if (error) throw error;
+        await cargarDatosDesdeNube();
+      } catch (err) {
+        console.error(err);
+        alert('❌ Error al eliminar la carpeta');
+      }
+    }
+
     function previewFotoFilamento(e) {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = function (evt) {
+      reader.onload = function(evt) {
         document.getElementById('fFotoBase64').value = evt.target.result;
-        const img = document.getElementById('imgPreviewFilamento');
-        img.src = evt.target.result;
-        img.style.display = 'block';
+        const imgPrev = document.getElementById('imgPreviewFilamento');
+        imgPrev.src = evt.target.result;
+        imgPrev.style.display = 'block';
       };
       reader.readAsDataURL(file);
     }
 
     async function guardarFilamento(e) {
       e.preventDefault();
-      const idEdit = document.getElementById('fFilamentoEditId').value;
+      const id = document.getElementById('fFilamentoEditId').value || generarUUID();
       const marca = document.getElementById('fMarca').value.trim();
       const tipo = document.getElementById('fTipo').value.trim();
       const color = document.getElementById('fColor').value.trim();
@@ -564,78 +1247,92 @@ if (fotoFile) {
       const url = document.getElementById('fUrl').value.trim();
       const foto = document.getElementById('fFotoBase64').value;
 
-      if (!marca || !tipo || !color) return;
-
-      const filData = {
-        marca,
-        tipo,
-        color,
-        color_hex: colorHex,
-        precio_kg: precioKg,
-        url,
-        foto
-      };
+      const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
+      localColors[id] = colorHex;
+      localStorage.setItem('3d_fil_colors', JSON.stringify(localColors));
 
       try {
-        let targetId = idEdit;
-        if (idEdit) {
-          const { error } = await _supabase.from('filamentos').update(filData).eq('id', idEdit);
-          if (error) throw error;
-        } else {
-          targetId = generarUUID();
-          const { error } = await _supabase.from('filamentos').insert([{ id: targetId, ...filData }]);
-          if (error) throw error;
-        }
+        const { error } = await _supabase.from('filamentos').upsert({
+          id, marca, tipo, color, color_hex: colorHex, precio_kg: precioKg, url, foto
+        });
 
-        const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
-        localColors[targetId] = colorHex;
-        localStorage.setItem('3d_fil_colors', JSON.stringify(localColors));
+        if (error) throw error;
 
         resetFormFilamento();
         await cargarDatosDesdeNube();
       } catch (err) {
-        console.error('Error al guardar filamento:', err);
+        console.error(err);
         alert('❌ Error al guardar el filamento');
       }
     }
 
     function resetFormFilamento() {
       document.getElementById('fFilamentoEditId').value = '';
-      document.getElementById('filFormTitle').textContent = '➕ Registrar Nuevo Filamento';
       document.getElementById('fMarca').value = '';
       document.getElementById('fTipo').value = '';
       document.getElementById('fColor').value = '';
       document.getElementById('fColorHex').value = '#ef4444';
       document.getElementById('fPrecioKg').value = '20';
       document.getElementById('fUrl').value = '';
-      document.getElementById('fFoto').value = '';
       document.getElementById('fFotoBase64').value = '';
+      document.getElementById('fFoto').value = '';
       document.getElementById('imgPreviewFilamento').style.display = 'none';
+
+      document.getElementById('filFormTitle').textContent = '➕ Registrar Nuevo Filamento';
       document.getElementById('btnCancelarEditFil').style.display = 'none';
     }
 
+    function renderFilamentos() {
+      const grid = document.getElementById('filamentosGrid');
+      grid.innerHTML = '';
+
+      filamentos.forEach(f => {
+        grid.innerHTML += `
+          <div class="product-card">
+            ${f.foto ? `<img src="${f.foto}" class="product-img" style="height:120px;">` : `<div class="product-img" style="height:120px; display:flex; align-items:center; justify-content:center; color:var(--text-muted);">Sin foto</div>`}
+            <div class="product-body" style="padding:10px;">
+              <div>
+                <strong style="font-size:0.9rem;">${f.marca} ${f.tipo}</strong>
+                <div style="display:flex; align-items:center; gap:6px; margin-top:4px; font-size:0.8rem;">
+                  <span class="color-box-sample" style="background:${f.color_hex};"></span>
+                  <span>${f.color}</span>
+                </div>
+              </div>
+              <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+                <strong style="color:var(--success); font-size:0.95rem;">${f.precio_kg} €/kg</strong>
+                <div style="display:flex; gap:4px;">
+                  <button class="btn btn-warning btn-sm" onclick="editarFilamento('${f.id}')">✏️</button>
+                  <button class="btn btn-danger btn-sm" onclick="eliminarFilamento('${f.id}')">🗑️</button>
+                </div>
+              </div>
+              ${f.url ? `<a href="${f.url}" target="_blank" style="font-size:0.75rem; color:var(--accent-hover); margin-top:6px; display:inline-block;">🔗 Enlace de compra</a>` : ''}
+            </div>
+          </div>
+        `;
+      });
+    }
+
     function editarFilamento(id) {
-      const f = filamentos.find(fil => fil.id === id);
+      const f = filamentos.find(item => item.id === id);
       if (!f) return;
 
       document.getElementById('fFilamentoEditId').value = f.id;
-      document.getElementById('filFormTitle').textContent = '✏️ Editando: ' + f.marca + ' ' + f.color;
       document.getElementById('fMarca').value = f.marca;
       document.getElementById('fTipo').value = f.tipo;
       document.getElementById('fColor').value = f.color;
-      document.getElementById('fColorHex').value = f.color_hex || '#808080';
+      document.getElementById('fColorHex').value = f.color_hex || '#ef4444';
       document.getElementById('fPrecioKg').value = f.precio_kg;
       document.getElementById('fUrl').value = f.url || '';
-      document.getElementById('fFotoBase64').value = f.foto || '';
 
       if (f.foto) {
-        document.getElementById('imgPreviewFilamento').src = f.foto;
-        document.getElementById('imgPreviewFilamento').style.display = 'block';
-      } else {
-        document.getElementById('imgPreviewFilamento').style.display = 'none';
+        document.getElementById('fFotoBase64').value = f.foto;
+        const imgPrev = document.getElementById('imgPreviewFilamento');
+        imgPrev.src = f.foto;
+        imgPrev.style.display = 'block';
       }
 
-      document.getElementById('btnCancelarEditFil').style.display = 'inline-block';
+      document.getElementById('filFormTitle').textContent = '✏️ Editar Filamento';
+      document.getElementById('btnCancelarEditFil').style.display = 'inline-flex';
     }
 
     async function eliminarFilamento(id) {
@@ -645,38 +1342,9 @@ if (fotoFile) {
         if (error) throw error;
         await cargarDatosDesdeNube();
       } catch (err) {
-        console.error('Error al borrar filamento:', err);
+        console.error(err);
         alert('❌ Error al eliminar el filamento');
       }
-    }
-
-    function renderFilamentos() {
-      const grid = document.getElementById('filamentosGrid');
-      grid.innerHTML = '';
-
-      if (filamentos.length === 0) {
-        grid.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">No hay filamentos guardados.</p>';
-        return;
-      }
-
-      filamentos.forEach(f => {
-        grid.innerHTML += `
-          <div class="product-card" style="padding:12px;">
-            ${f.foto ? `<img src="${f.foto}" style="width:100%; height:110px; object-fit:cover; border-radius:6px; margin-bottom:8px;">` : ''}
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-              <span class="color-box-sample" style="background-color:${f.color_hex || '#808080'};"></span>
-              <strong style="font-size:0.9rem;">${f.marca}</strong>
-            </div>
-            <div style="font-size:0.8rem; color:var(--text-muted);">${f.tipo} - ${f.color}</div>
-            <div style="font-size:0.95rem; font-weight:800; color:var(--success); margin:6px 0;">${f.precio_kg} €/kg</div>
-            ${f.url ? `<a href="${f.url}" target="_blank" style="font-size:0.75rem; color:var(--accent-hover); text-decoration:none; display:block; margin-bottom:8px;">🌐 Ver en tienda</a>` : ''}
-            <div style="display:flex; gap:6px; margin-top: auto;">
-              <button class="btn btn-warning btn-sm" style="flex:1;" onclick="editarFilamento('${f.id}')">✏️ Edit</button>
-              <button class="btn btn-danger btn-sm" onclick="eliminarFilamento('${f.id}')">🗑️</button>
-            </div>
-          </div>
-        `;
-      });
     }
 
     function cargarAjustesInputs() {
@@ -695,7 +1363,7 @@ if (fotoFile) {
       config.multiplicador = parseFloat(document.getElementById('cfgMultiplicador').value) || 2.0;
 
       localStorage.setItem('3d_cfg_v7', JSON.stringify(config));
-      alert('✅ Configuración guardada correctamente');
+      alert('✅ Ajustes guardados correctamente');
       calcular();
     }
 
