@@ -36,10 +36,22 @@
       justify-content: space-between;
       gap: 16px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      flex-wrap: wrap;
+      position: relative;
     }
 
     .brand { font-size: 1.3rem; font-weight: 900; color: var(--accent-hover); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+
+    .menu-toggle {
+      display: none;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: var(--text-main);
+    }
 
     .nav-links {
       display: flex; gap: 6px; flex: 1; max-width: 950px; justify-content: flex-end; flex-wrap: wrap;
@@ -54,6 +66,26 @@
     .nav-btn:hover, .nav-btn.active {
       background-color: var(--accent); color: #ffffff; border-color: var(--accent-hover);
       box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+    }
+
+    /* Adaptación específica para vista móvil en vertical */
+    @media (max-width: 768px) {
+      .menu-toggle { display: block; }
+      .nav-links {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background: var(--panel-bg);
+        border-bottom: 2px solid var(--border);
+        padding: 10px 16px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        z-index: 50;
+      }
+      .nav-links.mobile-open { display: flex; }
+      .nav-btn { width: 100%; text-align: left; padding: 10px 14px; }
     }
 
     main { flex: 1; padding: 16px; max-width: 1200px; margin: 0 auto; width: 100%; }
@@ -156,11 +188,12 @@
 
   <navbar>
     <div class="brand">🚀 3DPrintGo</div>
-    <div class="nav-links">
+    <button class="menu-toggle" onclick="toggleNavMenu()">☰ Menú</button>
+    <div class="nav-links" id="navLinks">
       <button class="nav-btn active" onclick="switchTab('inicio', event)">🏠 Inicio</button>
       <button class="nav-btn" onclick="switchTab('calculadora', event)">🧮 Calculadora</button>
       <button class="nav-btn" onclick="switchTab('catalogo', event)">📦 Piezas</button>
-      <button class="nav-btn" onclick="switchTab('carpetas', event)">📁 Empresas</button>
+      <button class="nav-btn" onclick="switchTab('carpetas', event)">📁 Carpetas</button>
       <button class="nav-btn" onclick="switchTab('filamentos', event)">🎨 Filamentos</button>
       <button class="nav-btn" onclick="switchTab('ajustes', event)">⚙️ Ajustes</button>
     </div>
@@ -175,7 +208,7 @@
           <div class="kpi-val" id="kpiTotalPiezas">0</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Empresas / Carpetas</div>
+          <div class="kpi-label">Carpetas</div>
           <div class="kpi-val" id="kpiTotalEmpresas">0</div>
         </div>
         <div class="kpi-card">
@@ -235,7 +268,7 @@
           </div>
 
           <div class="form-group">
-            <label>Carpeta de Empresa / Cliente</label>
+            <label>Carpeta Destino</label>
             <select id="cEmpresaSel"></select>
           </div>
 
@@ -382,15 +415,15 @@
       <div class="catalog-grid" id="catalogGrid"></div>
     </div>
 
-    <!-- TAB: EMPRESAS / CARPETAS -->
+    <!-- TAB: CARPETAS -->
     <div id="tab-carpetas" class="tab-content">
       <div class="grid-2">
         <div class="card">
-          <div class="card-title"><span id="empFormTitle">➕ Crear Carpeta de Empresa</span></div>
+          <div class="card-title"><span id="empFormTitle">➕ Crear Nueva Carpeta</span></div>
           <form id="empresaForm" onsubmit="guardarEmpresa(event)">
             <input type="hidden" id="eEmpresaEditId">
             <div class="form-group">
-              <label>Nombre de la Empresa / Cliente *</label>
+              <label>Nombre de la Carpeta / Cliente *</label>
               <input type="text" id="eNombreEmpresa" required placeholder="Ej. General, Atlántico, Gocozi...">
             </div>
             <div class="form-group">
@@ -398,13 +431,13 @@
               <select id="ePadreSel"></select>
             </div>
             <div class="form-group">
-              <label>Logo de la Empresa (Opcional)</label>
+              <label>Logo / Imagen (Opcional)</label>
               <input type="file" id="eLogoEmpresa" accept="image/*" onchange="previewLogoEmpresa(event)">
               <input type="hidden" id="eLogoBase64">
               <img id="imgPreviewLogo" style="max-height: 80px; object-fit: contain; margin-top: 8px; display: none; border-radius: 6px;">
             </div>
             <div style="display:flex; gap:10px;">
-              <button type="submit" class="btn" style="flex:1;" id="btnGuardarEmpresa">Crear Carpeta</button>
+              <button type="submit" class="btn" style="flex:1;" id="btnGuardarEmpresa">Guardar Carpeta</button>
               <button type="button" class="btn btn-secondary" id="btnCancelarEditEmp" style="display:none;" onclick="resetFormEmpresa()">Cancelar</button>
             </div>
           </form>
@@ -535,6 +568,11 @@
       return 'prod_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
     }
 
+    function toggleNavMenu() {
+      const navLinks = document.getElementById('navLinks');
+      navLinks.classList.toggle('mobile-open');
+    }
+
     async function cargarDatosDesdeNube() {
       try {
         const { data: emps } = await _supabase.from('empresas').select('*').order('created_at', { ascending: true });
@@ -565,6 +603,7 @@
         cargarCalculadora();
         renderCatalogo();
         renderFilamentos();
+        renderEmpresas();
       } catch (e) {
         console.error("Error al cargar datos:", e);
       }
@@ -581,6 +620,9 @@
         const btn = Array.from(document.querySelectorAll('.nav-btn')).find(b => b.getAttribute('onclick').includes(tabId));
         if (btn) btn.classList.add('active');
       }
+
+      // Cierra el menú desplegable en pantallas móviles
+      document.getElementById('navLinks').classList.remove('mobile-open');
 
       if(tabId === 'inicio') renderHome();
       if(tabId === 'calculadora') cargarCalculadora();
@@ -700,7 +742,7 @@
       const sel = document.getElementById(selectId);
       sel.innerHTML = '';
       if (empresas.length === 0) {
-        sel.innerHTML = '<option value="">⚠ Crea primero una carpeta en Empresas</option>';
+        sel.innerHTML = '<option value="">⚠ Crea primero una carpeta</option>';
         return;
       }
 
@@ -883,7 +925,7 @@
       const empresaId = document.getElementById('cEmpresaSel').value;
 
       if (!nombre) { alert('Por favor, indica un nombre para la pieza.'); return; }
-      if (!empresaId) { alert('Por favor, selecciona una carpeta de empresa.'); return; }
+      if (!empresaId) { alert('Por favor, selecciona una carpeta.'); return; }
 
       const peso = parseFloat(document.getElementById('cPeso').value) || 0;
       const horas = parseFloat(document.getElementById('cHoras').value) || 0;
@@ -1104,7 +1146,7 @@
 
         <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px;">
           <button class="btn btn-warning" onclick="editarProducto('${p.id}')">✏️ Editar Pieza</button>
-          <button class="btn btn-danger" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar Pieza</button>
+          <button class="btn btn-danger" onclick="eliminarProducto('${p.id}')">🗑️️ Eliminar Pieza</button>
         </div>
       `;
 
@@ -1128,14 +1170,14 @@
       }
     }
 
-    /* GESTIÓN DE EMPRESAS */
+    /* GESTIÓN DE CARPETAS */
     function renderEmpresas() {
       const grid = document.getElementById('empresasGrid');
       cargarSelectEmpresas('ePadreSel');
       grid.innerHTML = '';
 
       if (empresas.length === 0) {
-        grid.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">No hay carpetas de empresas creadas.</p>';
+        grid.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">No hay carpetas creadas.</p>';
         return;
       }
 
@@ -1144,7 +1186,10 @@
           <div class="card" style="padding:10px; text-align:center; margin-bottom:0;">
             ${emp.logo ? `<img src="${emp.logo}" style="height:40px; object-fit:contain; margin-bottom:6px;">` : '📁'}
             <strong style="display:block; font-size:0.85rem;">${emp.nombre}</strong>
-            <button class="btn btn-danger btn-sm" style="margin-top:6px;" onclick="eliminarEmpresa('${emp.id}')">Eliminar</button>
+            <div style="margin-top:8px; display:flex; gap:4px; justify-content:center;">
+              <button class="btn btn-warning btn-sm" onclick="editarEmpresa('${emp.id}')">✏️ Editar</button>
+              <button class="btn btn-danger btn-sm" onclick="eliminarEmpresa('${emp.id}')">🗑️ Eliminar</button>
+            </div>
           </div>
         `;
       });
@@ -1163,42 +1208,75 @@
       reader.readAsDataURL(file);
     }
 
+    function editarEmpresa(id) {
+      const emp = empresas.find(e => e.id === id);
+      if (!emp) return;
+
+      document.getElementById('eEmpresaEditId').value = emp.id;
+      document.getElementById('empFormTitle').textContent = '✏️️ Editar Carpeta';
+      document.getElementById('eNombreEmpresa').value = emp.nombre || '';
+      document.getElementById('btnGuardarEmpresa').textContent = '🔄 Actualizar Carpeta';
+      document.getElementById('btnCancelarEditEmp').style.display = 'inline-block';
+
+      cargarSelectEmpresas('ePadreSel', emp.padre_id);
+
+      document.getElementById('eLogoBase64').value = emp.logo || '';
+      const img = document.getElementById('imgPreviewLogo');
+      if (emp.logo) {
+        img.src = emp.logo;
+        img.style.display = 'block';
+      } else {
+        img.src = '';
+        img.style.display = 'none';
+      }
+    }
+
     async function guardarEmpresa(e) {
       e.preventDefault();
+      const editId = document.getElementById('eEmpresaEditId').value;
       const nombre = document.getElementById('eNombreEmpresa').value.trim();
       const padreId = document.getElementById('ePadreSel').value;
       const logo = document.getElementById('eLogoBase64').value || null;
 
       if (!nombre) return;
 
-      const nuevaEmpresa = { id: generarUUID(), nombre, padre_id: padreId || null, logo };
+      const payloadEmpresa = { nombre, padre_id: padreId || null, logo };
+
       try {
-        const { error } = await _supabase.from('empresas').insert([nuevaEmpresa]);
-        if (error) throw error;
-        
+        if (editId) {
+          const { error } = await _supabase.from('empresas').update(payloadEmpresa).eq('id', editId);
+          if (error) throw error;
+        } else {
+          payloadEmpresa.id = generarUUID();
+          const { error } = await _supabase.from('empresas').insert([payloadEmpresa]);
+          if (error) throw error;
+        }
+
         resetFormEmpresa();
         await cargarDatosDesdeNube();
-        renderEmpresas();
       } catch (err) {
-        alert('Error al guardar la carpeta de empresa.');
+        alert('Error al guardar la carpeta.');
       }
     }
 
     function resetFormEmpresa() {
       document.getElementById('empresaForm').reset();
+      document.getElementById('eEmpresaEditId').value = '';
+      document.getElementById('empFormTitle').textContent = '➕ Crear Nueva Carpeta';
+      document.getElementById('btnGuardarEmpresa').textContent = 'Guardar Carpeta';
+      document.getElementById('btnCancelarEditEmp').style.display = 'none';
       document.getElementById('eLogoBase64').value = '';
       document.getElementById('imgPreviewLogo').style.display = 'none';
     }
 
     async function eliminarEmpresa(id) {
-      if (!confirm('¿Seguro que deseas eliminar esta carpeta?')) return;
+      if (!confirm('¿Seguro que deseas eliminar esta carpeta? Las piezas asignadas a ella se desvincularán pero no se borrarán.')) return;
       try {
         const { error } = await _supabase.from('empresas').delete().eq('id', id);
         if (error) throw error;
         await cargarDatosDesdeNube();
-        renderEmpresas();
       } catch (err) {
-        alert('Error al eliminar la empresa.');
+        alert('Error al eliminar la carpeta.');
       }
     }
 
