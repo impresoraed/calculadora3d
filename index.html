@@ -120,7 +120,6 @@
     }
     .folder-chip.active { background: var(--accent); color: #ffffff; border-color: var(--accent-hover); }
 
-    /* MUESTRA VISUAL DE COLOR */
     .color-box-sample {
       width: 22px;
       height: 22px;
@@ -141,12 +140,6 @@
     .modal-body { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 700px; max-height: 90vh; overflow-y: auto; padding: 20px; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
     .close-modal { position: absolute; top: 12px; right: 16px; font-size: 1.8rem; cursor: pointer; color: var(--text-muted); }
 
-    .fil-badge-item {
-      display: flex; justify-content: space-between; align-items: center; background: var(--card-bg);
-      border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 0.85rem;
-    }
-
-    /* ESTILOS DE COMPONENTES EXTRA / SOBRECOSTES */
     .extra-item-row {
       background: #f8fafc;
       border: 1px solid var(--border);
@@ -296,7 +289,7 @@
             <div class="fil-checklist" id="cFilamentosChecklist"></div>
           </div>
 
-          <!-- SECCIÓN: COMPONENTES / SOBRECOSTES EXTRA (NUEVO) -->
+          <!-- SECCIÓN: COMPONENTES / SOBRECOSTES EXTRA -->
           <div class="form-group" style="margin-top:15px; border-top:1px dashed var(--border); padding-top:12px;">
             <details style="cursor:pointer;" open>
               <summary style="font-weight:700; font-size:0.85rem; color:var(--accent-hover); margin-bottom:10px;">
@@ -331,7 +324,6 @@
             <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
               <span>Gastos Fijos:</span> <strong id="rGastosFijos">0.000 €</strong>
             </div>
-            <!-- LÍNEA DE DESGLOSE DE COMPONENTES EXTRA -->
             <div style="display:flex; justify-content:space-between; margin-bottom:6px; color:var(--accent-hover);">
               <span>Componentes Extra (LEDs/Tornillos):</span> <strong id="rExtrasVal">0.000 €</strong>
             </div>
@@ -550,10 +542,10 @@
         productos = (prods || []).map(p => ({
           ...p,
           empresaId: (p.empresa_id && p.empresa_id !== 'emp_general' && p.empresa_id !== 'null' && p.empresa_id !== '') ? p.empresa_id : primeraCarpetaId,
-          descuentoPct: p.descuento_pct,
+          descuentoPct: p.descuento_pct || 0,
           filamentosIds: p.filamentos_ids || [],
-          costeTotal: p.coste_total,
-          precioVenta: p.precio_venta
+          costeTotal: p.coste_total || 0,
+          precioVenta: p.precio_venta || 0
         }));
 
         renderHome();
@@ -706,7 +698,6 @@
       });
     }
 
-    /* GESTIÓN DE COMPONENTES / SOBRECOSTES EXTRA */
     function addExtraRow(concepto = '', precio = '', cantidad = '1', url = '') {
       const container = document.getElementById('cExtrasContainer');
       const div = document.createElement('div');
@@ -764,7 +755,6 @@
       const descuentoPct = parseFloat(document.getElementById('cDescuentoPct').value) || 0;
       const precioManual = parseFloat(document.getElementById('cPrecioManual').value);
 
-      // Calcular precio medio del filamento seleccionado
       const checkedFil = Array.from(document.querySelectorAll('#cFilamentosChecklist input:checked')).map(i => i.value);
       let precioKgBase = config.filamento;
       
@@ -778,26 +768,16 @@
 
       document.getElementById('rPrecioBaseKg').textContent = precioKgBase.toFixed(2);
 
-      // 1. Coste Material
       const costeMat = (peso / 1000) * precioKgBase;
-
-      // 2. Extra Color (AMS)
       const extraColor = numColores > 1 ? (numColores - 1) * config.extraColor : 0;
-
-      // 3. Tiempo de Máquina
       const totalHoras = horas + (minutos / 60);
       const costeTiempo = totalHoras * config.horaMaquina;
-
-      // 4. Gastos Fijos
       const gastosFijos = config.gastosFijos;
 
-      // 5. Componentes y Sobrecostes Extra
       const { totalSobrecoste } = getExtrasData();
 
-      // Coste total de producción unitario
       const costeTotalUnitario = costeMat + extraColor + costeTiempo + gastosFijos + totalSobrecoste;
 
-      // Precio final calculado (o manual)
       let precioFinalUnitario = 0;
       if (!isNaN(precioManual) && precioManual > 0) {
         precioFinalUnitario = precioManual;
@@ -809,7 +789,6 @@
         precioFinalUnitario = precioBaseVenta;
       }
 
-      // Render Desglose
       document.getElementById('rMat').textContent = costeMat.toFixed(3) + ' €';
       document.getElementById('rColor').textContent = extraColor.toFixed(3) + ' €';
       document.getElementById('rTiempo').textContent = costeTiempo.toFixed(3) + ' €';
@@ -826,7 +805,6 @@
 
       document.getElementById('rPrecioUnitario').textContent = precioFinalUnitario.toFixed(2) + ' €';
 
-      // Lote Personalizado
       const cantLote = parseInt(document.getElementById('cLoteCustom').value) || 1;
       const totalLote = cantLote * precioFinalUnitario;
       const costeTotalLote = cantLote * costeTotalUnitario;
@@ -835,7 +813,6 @@
       document.getElementById('rLoteCustomTotal').textContent = totalLote.toFixed(2) + ' €';
       document.getElementById('rLoteCustomBeneficio').textContent = (beneficioLote >= 0 ? '+' : '') + beneficioLote.toFixed(2) + ' €';
 
-      // Escalado Estándar
       const lotesStd = [10, 50, 100, 500, 1000];
       const tabla = document.getElementById('tablaLotes');
       tabla.innerHTML = '';
@@ -863,13 +840,12 @@
       const horas = parseFloat(document.getElementById('cHoras').value) || 0;
       const minutos = parseFloat(document.getElementById('cMinutos').value) || 0;
       const descuentoPct = parseFloat(document.getElementById('cDescuentoPct').value) || 0;
-      const foto = document.getElementById('cFotoBase64').value;
-      const notasUsuario = document.getElementById('cNotas').value;
+      const foto = document.getElementById('cFotoBase64').value || null;
+      const notasUsuario = document.getElementById('cNotas').value || '';
 
       const checkedFil = Array.from(document.querySelectorAll('#cFilamentosChecklist input:checked')).map(i => i.value);
       const { items: extrasItems, totalSobrecoste } = getExtrasData();
 
-      // Cálculo de costes finales
       let precioKgBase = config.filamento;
       if (checkedFil.length > 0) {
         const seleccionados = filamentos.filter(f => checkedFil.includes(f.id));
@@ -894,10 +870,10 @@
         precioVentaUnitario = pBase;
       }
 
-      // Guardamos la información de los extras empaquetada dentro de notas para no modificar columnas de Supabase
       const extrasMetaData = extrasItems.length > 0 ? `\n\n[COMPONENTES_EXTRA]: ${JSON.stringify(extrasItems)}` : '';
       const notasFinales = notasUsuario + extrasMetaData;
 
+      // Objeto estrictamente compatible con las columnas de tu Supabase original
       const nuevoProducto = {
         nombre: nombre,
         empresa_id: empresaId,
@@ -908,20 +884,24 @@
         filamentos_ids: checkedFil,
         foto: foto,
         notas: notasFinales,
-        coste_total: costeTotalUnitario,
-        precio_venta: precioVentaUnitario
+        coste_total: parseFloat(costeTotalUnitario.toFixed(4)),
+        precio_venta: parseFloat(precioVentaUnitario.toFixed(4))
       };
 
       try {
         const { data, error } = await _supabase.from('productos').insert([nuevoProducto]).select();
-        if (error) throw error;
+        if (error) {
+          console.error('Error directo de Supabase:', error);
+          alert('Error de Supabase: ' + (error.message || 'Verifica la consola'));
+          return;
+        }
 
         alert('¡Pieza guardada correctamente en la nube!');
         await cargarDatosDesdeNube();
         switchTab('catalogo');
       } catch (e) {
         console.error('Error al guardar pieza:', e);
-        alert('Error al guardar en Supabase. Revisa la consola.');
+        alert('Error al guardar en Supabase.');
       }
     }
 
@@ -930,14 +910,12 @@
       const folderBar = document.getElementById('folderBar');
       const grid = document.getElementById('catalogGrid');
 
-      // Barra de carpetas
       folderBar.innerHTML = `<div class="folder-chip ${carpetaFiltroActual === 'TODAS' ? 'active' : ''}" onclick="filtrarCarpeta('TODAS')">📁 Todas (${productos.length})</div>`;
       empresas.forEach(e => {
         const num = productos.filter(p => p.empresaId === e.id).length;
         folderBar.innerHTML += `<div class="folder-chip ${carpetaFiltroActual === e.id ? 'active' : ''}" onclick="filtrarCarpeta('${e.id}')">📁 ${e.nombre} (${num})</div>`;
       });
 
-      // Filtrar productos
       let filtrados = productos.filter(p => p.nombre.toLowerCase().includes(search));
       if (carpetaFiltroActual !== 'TODAS') {
         filtrados = filtrados.filter(p => p.empresaId === carpetaFiltroActual);
@@ -980,7 +958,6 @@
 
       const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'General' };
       
-      // Parsear sobrecostes extra si existen en notas
       let extrasHtml = '';
       let notasLimpias = p.notas || '';
       if (notasLimpias.includes('[COMPONENTES_EXTRA]:')) {
@@ -1087,7 +1064,7 @@
       e.preventDefault();
       const nombre = document.getElementById('eNombreEmpresa').value.trim();
       const padreId = document.getElementById('ePadreSel').value;
-      const logo = document.getElementById('eLogoBase64').value;
+      const logo = document.getElementById('eLogoBase64').value || null;
 
       if (!nombre) return;
 
@@ -1171,8 +1148,8 @@
       const color = document.getElementById('fColor').value.trim();
       const colorHex = document.getElementById('fColorHex').value;
       const precioKg = parseFloat(document.getElementById('fPrecioKg').value) || 20;
-      const url = document.getElementById('fUrl').value.trim();
-      const foto = document.getElementById('fFotoBase64').value;
+      const url = document.getElementById('fUrl').value.trim() || null;
+      const foto = document.getElementById('fFotoBase64').value || null;
 
       if (!marca || !tipo || !color) return;
 
@@ -1182,7 +1159,6 @@
         const { data, error } = await _supabase.from('filamentos').insert([nuevoFil]).select();
         if (error) throw error;
 
-        // Guardar color_hex en local como respaldo
         if (data && data[0]) {
           const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
           localColors[data[0].id] = colorHex;
@@ -1238,7 +1214,6 @@
       calcular();
     }
 
-    // Inicializar al cargar la página
     window.addEventListener('DOMContentLoaded', () => {
       cargarDatosDesdeNube();
     });
