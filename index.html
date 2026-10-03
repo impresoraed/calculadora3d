@@ -684,47 +684,690 @@
       const imgPrev = document.getElementById('imgPreview');
       const inputBase64 = document.getElementById('cFotoBase64');
 
-      status.textContent = "Procesando archivo...";
+      if (file.name.endsWith('.3mf')) {
+        status.textContent = 'Procesando .3mf...';
+        try {
+          const zip = await JSZip.loadAsync(file);
+          const fotoFile = zip.file('Metadata/plate_1.png') || zip.file('Metadata/thumbnail.png');
 
-      if (file.type.startsWith('image/')) {
+          if (fotoFile) {
+            const blob = await fotoFile.async('blob');
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+              inputBase64.value = evt.target.result;
+              imgPrev.src = evt.target.result;
+              imgPrev.style.display = 'block';
+            };
+            reader.readAsDataURL(blob);
+          }
+
+          let pesoEncontrado = 0;
+          let segundosEncontrados = 0;
+
+          const sliceInfoFile = zip.file('Metadata/slice_info.config');
+          if (sliceInfoFile) {
+            const text = await sliceInfoFile.async('text');
+            const matchGramos = text.match(/used_g\s*=\s*([0-9.]+)/);
+            if (matchGramos) pesoEncontrado = parseFloat(matchGramos[1]);
+
+            const matchTiempo = text.match(/prediction\s*=\s*([0-9]+)/);
+            if (matchTiempo) segundosEncontrados = parseInt(matchTiempo[1]);
+          }
+
+          if (pesoEncontrado > 0) document.getElementById('cPeso').value = pesoEncontrado.toFixed(1);
+
+          if (segundosEncontrados > 0) {
+            const horas = Math.floor(segundosEncontrados / 3600);
+            const minutos = Math.floor((segundosEncontrados % 3600) / 60);
+            document.getElementById('cHoras').value = horas;
+            document.getElementById('cMinutos').value = minutos;
+          }
+
+          status.textContent = '✅ Archivo .3mf procesado correctamente';
+          calcular();
+        } catch (err) {
+          console.error(err);
+          status.textContent = '❌ Error al leer el archivo .3mf';
+        }
+      } else if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = function(evt) {
           inputBase64.value = evt.target.result;
           imgPrev.src = evt.target.result;
           imgPrev.style.display = 'block';
-          status.textContent = "Imagen cargada con éxito";
+          status.textContent = '✅ Imagen cargada correctamente';
         };
         reader.readAsDataURL(file);
-      } else if (file.name.endsWith('.3mf')) {
-        try {
-          const zip = await JSZip.loadAsync(file);
-          let previewFile = zip.file("Metadata/plate_1.png") || zip.file("Metadata/thumbnail.png");
-          
-          if (!previewFile) {
-            const files = zip.file(/Metadata\/.*\.png$/i);
-            if (files.length > 0) previewFile = files[0];
-          }
-
-          if (previewFile) {
-            const base64 = await previewFile.async("base64");
-            const dataUrl = "data:image/png;base64," + base64;
-            inputBase64.value = dataUrl;
-            imgPrev.src = dataUrl;
-            imgPrev.style.display = 'block';
-            status.textContent = "Vista previa extraída del .3mf";
-          } else {
-            status.textContent = "3MF cargado (sin vista previa de imagen)";
-          }
-        } catch (err) {
-          console.error("Error al leer 3MF:", err);
-          status.textContent = "Error al procesar el archivo 3MF";
-        }
-      } else {
-        status.textContent = "Formato no soportado";
       }
     }
 
-    document.addEventListener("DOMContentLoaded", () => {
+    function addExtraRow(nombre = '', precio = 0) {
+      const container = document.getElementById('cExtrasContainer');
+      const div = document.createElement('div');
+      div.className = 'extra-item-row';
+      div.innerHTML = `
+        <div style="display:flex; gap:8px;">
+          <input type="text" class="extra-nombre" placeholder="Nombre componente (Ej. LED)" value="${nombre}" oninput="calcular()" style="flex:2;">
+          <input type="number" class="extra-precio" placeholder="Coste (€)" value="${precio || ''}" step="0.01" min="0" oninput="calcular()" style="flex:1;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.extra-item-row').remove(); calcular();">🗑️</button>
+        </div>
+      `;
+      container.appendChild(div);
+    }
+
+    function getExtrasData() {
+      const rows = document.querySelectorAll('.extra-item-row');
+      const extras = [];
+      rows.forEach(r => {
+        const nom = r.querySelector('.extra-nombre').value.trim();
+        const prec = parseFloat(r.querySelector('.extra-precio').value) || 0;
+        if (nom || prec > 0) {
+          extras.push({ nombre: nom, precio: prec });
+        }
+      });
+      return extras;
+    }
+
+    function cargarCalculadora() {
+      const empSel = document.getElementById('cEmpresaSel');
+      empSel.innerHTML = '';
+      empresas.forEach(e => {
+        empSel.innerHTML += `<option value="${e.id}">${e.nombre}</option>`;
+      });
+
+      const filChecklist = document.getElementById('cFilamentosChecklist');
+      filChecklist.innerHTML = '';
+      if (filamentos.length === 0) {
+        filChecklist.innerHTML = '<span style="font-size:0.8rem; color:var(--text-muted);">No hay filamentos guardados.</span>';
+      } else {
+        filamentos.forEach(f => {
+          filChecklist.innerHTML += `
+            <label class="fil-item">
+              <input type="checkbox" value="${f.id}" onchange="calcular()">
+              <span class="color-box-sample" style="background-color:${f.color_hex}"></span>
+              <span>${f.marca} ${f.tipo} - ${f.color} (${f.precio_kg} €/kg)</span>
+            </label>
+          `;
+        });
+      }
+
+      document.getElementById('rPrecioBaseKg').textContent = config.filamento;
+      calcular();
+    }
+
+    function calcular() {
+      const peso = parseFloat(document.getElementById('cPeso').value) || 0;
+      const numColores = parseInt(document.getElementById('cColores').value) || 1;
+      const horas = parseFloat(document.getElementById('cHoras').value) || 0;
+      const minutos = parseFloat(document.getElementById('cMinutos').value) || 0;
+      const descuentoPct = parseFloat(document.getElementById('cDescuentoPct').value) || 0;
+      const precioManualInput = parseFloat(document.getElementById('cPrecioManual').value);
+
+      const checkboxes = document.querySelectorAll('#cFilamentosChecklist input[type="checkbox"]:checked');
+      let precioKgBase = config.filamento;
+
+      if (checkboxes.length > 0) {
+        let sumaPrecios = 0;
+        checkboxes.forEach(cb => {
+          const fil = filamentos.find(f => f.id === cb.value);
+          if (fil) sumaPrecios += parseFloat(fil.precio_kg || config.filamento);
+        });
+        precioKgBase = sumaPrecios / checkboxes.length;
+      }
+
+      document.getElementById('rPrecioBaseKg').textContent = precioKgBase.toFixed(2);
+
+      const costeMaterial = (peso / 1000) * precioKgBase;
+      const suplementoColor = (numColores - 1) * config.extraColor;
+      const tiempoTotalHoras = horas + (minutos / 60);
+      const costeTiempo = tiempoTotalHoras * config.horaMaquina;
+      const gastosFijos = config.gastosFijos;
+
+      const extras = getExtrasData();
+      const costeExtras = extras.reduce((sum, item) => sum + item.precio, 0);
+
+      const costeTotalDirecto = costeMaterial + suplementoColor + costeTiempo + gastosFijos + costeExtras;
+
+      let precioUnitarioVenta = 0;
+
+      if (!isNaN(precioManualInput) && precioManualInput > 0) {
+        precioUnitarioVenta = precioManualInput;
+      } else {
+        const precioBaseConMargen = costeTotalDirecto * config.multiplicador;
+        precioUnitarioVenta = precioBaseConMargen * (1 - (descuentoPct / 100));
+      }
+
+      document.getElementById('rMat').textContent = costeMaterial.toFixed(3) + ' €';
+      document.getElementById('rColor').textContent = suplementoColor.toFixed(3) + ' €';
+      document.getElementById('rTiempo').textContent = costeTiempo.toFixed(3) + ' €';
+      document.getElementById('rGastosFijos').textContent = gastosFijos.toFixed(3) + ' €';
+      document.getElementById('rExtrasVal').textContent = costeExtras.toFixed(3) + ' €';
+      document.getElementById('rDescVal').textContent = descuentoPct + ' %';
+      document.getElementById('rPrecioUnitario').textContent = precioUnitarioVenta.toFixed(2) + ' €';
+
+      const customCant = parseInt(document.getElementById('cLoteCustom').value) || 1;
+      const totalCustomVenta = customCant * precioUnitarioVenta;
+      const totalCustomCoste = customCant * costeTotalDirecto;
+      const beneficioCustom = totalCustomVenta - totalCustomCoste;
+
+      document.getElementById('rLoteCustomTotal').textContent = totalCustomVenta.toFixed(2) + ' €';
+      document.getElementById('rLoteCustomBeneficio').textContent = (beneficioCustom >= 0 ? '+' : '') + beneficioCustom.toFixed(2) + ' €';
+
+      const tablaLotes = document.getElementById('tablaLotes');
+      tablaLotes.innerHTML = '';
+      [10, 50, 100, 500, 1000].forEach(lote => {
+        const totalVenta = lote * precioUnitarioVenta;
+        const totalCoste = lote * costeTotalDirecto;
+        const beneficio = totalVenta - totalCoste;
+        tablaLotes.innerHTML += `
+          <tr>
+            <td><strong>${lote} ud</strong></td>
+            <td>${totalVenta.toFixed(2)} €</td>
+            <td style="color:var(--success); font-weight:700;">+${beneficio.toFixed(2)} €</td>
+          </tr>
+        `;
+      });
+    }
+
+    async function guardarEnCatalogo() {
+      const editId = document.getElementById('cProductoEditId').value;
+      const nombre = document.getElementById('cNombre').value.trim();
+      if (!nombre) return alert('Debes indicar un nombre para la pieza.');
+
+      const empresaId = document.getElementById('cEmpresaSel').value;
+      const peso = parseFloat(document.getElementById('cPeso').value) || 0;
+      const colores = parseInt(document.getElementById('cColores').value) || 1;
+      const horas = parseInt(document.getElementById('cHoras').value) || 0;
+      const minutos = parseInt(document.getElementById('cMinutos').value) || 0;
+      const descuentoPct = parseFloat(document.getElementById('cDescuentoPct').value) || 0;
+      const foto = document.getElementById('cFotoBase64').value;
+      const notas = document.getElementById('cNotas').value;
+
+      const checkedFils = Array.from(document.querySelectorAll('#cFilamentosChecklist input[type="checkbox"]:checked')).map(cb => cb.value);
+      const extras = getExtrasData();
+
+      let precioKgBase = config.filamento;
+      if (checkedFils.length > 0) {
+        let sumaPrecios = 0;
+        checkedFils.forEach(fid => {
+          const fil = filamentos.find(f => f.id === fid);
+          if (fil) sumaPrecios += parseFloat(fil.precio_kg || config.filamento);
+        });
+        precioKgBase = sumaPrecios / checkedFils.length;
+      }
+
+      const costeMaterial = (peso / 1000) * precioKgBase;
+      const suplementoColor = (colores - 1) * config.extraColor;
+      const costeTiempo = (horas + minutos/60) * config.horaMaquina;
+      const costeExtras = extras.reduce((sum, item) => sum + item.precio, 0);
+
+      const costeTotal = costeMaterial + suplementoColor + costeTiempo + config.gastosFijos + costeExtras;
+
+      const precioManualInput = parseFloat(document.getElementById('cPrecioManual').value);
+      let precioVenta = 0;
+      if (!isNaN(precioManualInput) && precioManualInput > 0) {
+        precioVenta = precioManualInput;
+      } else {
+        precioVenta = (costeTotal * config.multiplicador) * (1 - (descuentoPct / 100));
+      }
+
+      const payload = {
+        id: editId || generarUUID(),
+        nombre,
+        empresa_id: empresaId,
+        peso,
+        colores,
+        horas,
+        minutos,
+        descuento_pct: descuentoPct,
+        foto,
+        notas,
+        filamentos_ids: checkedFils,
+        extras,
+        coste_total: costeTotal,
+        precio_venta: precioVenta
+      };
+
+      try {
+        const { error } = await _supabase.from('productos').upsert(payload);
+        if (error) throw error;
+
+        alert('✅ Pieza guardada correctamente');
+        resetFormCalculadora();
+        await cargarDatosDesdeNube();
+        switchTab('catalogo');
+      } catch (err) {
+        console.error(err);
+        alert('❌ Error al guardar en Supabase');
+      }
+    }
+
+    function resetFormCalculadora() {
+      document.getElementById('cProductoEditId').value = '';
+      document.getElementById('cNombre').value = '';
+      document.getElementById('cFotoBase64').value = '';
+      document.getElementById('imgPreview').style.display = 'none';
+      document.getElementById('status3mf').textContent = '';
+      document.getElementById('cPeso').value = '1.5';
+      document.getElementById('cColores').value = '1';
+      document.getElementById('cHoras').value = '0';
+      document.getElementById('cMinutos').value = '3';
+      document.getElementById('cDescuentoPct').value = '0';
+      document.getElementById('cPrecioManual').value = '';
+      document.getElementById('cNotas').value = '';
+      document.getElementById('cExtrasContainer').innerHTML = '';
+      document.getElementById('cArch3mf').value = '';
+
+      document.getElementById('calcFormTitle').textContent = '1. Datos de la Pieza';
+      document.getElementById('btnCancelarEditProd').style.display = 'none';
+
+      cargarCalculadora();
+    }
+
+    function nuevaPiezaLimpia() {
+      resetFormCalculadora();
+      switchTab('calculadora');
+    }
+
+    function renderCatalogo() {
+      const query = document.getElementById('catSearch').value.toLowerCase();
+      const folderBar = document.getElementById('folderBar');
+      const catalogGrid = document.getElementById('catalogGrid');
+
+      folderBar.innerHTML = `<div class="folder-chip ${carpetaFiltroActual === 'TODAS' ? 'active' : ''}" onclick="filtrarCarpeta('TODAS')">📁 Todas</div>`;
+      empresas.forEach(e => {
+        folderBar.innerHTML += `<div class="folder-chip ${carpetaFiltroActual === e.id ? 'active' : ''}" onclick="filtrarCarpeta('${e.id}')">📁 ${e.nombre}</div>`;
+      });
+
+      catalogGrid.innerHTML = '';
+
+      const filtrados = productos.filter(p => {
+        const coincideQuery = p.nombre.toLowerCase().includes(query);
+        const coincideCarpeta = (carpetaFiltroActual === 'TODAS') || (p.empresaId === carpetaFiltroActual);
+        return coincideQuery && coincideCarpeta;
+      });
+
+      if (filtrados.length === 0) {
+        catalogGrid.innerHTML = '<p style="color:var(--text-muted); font-size:0.9rem;">No se encontraron piezas.</p>';
+        return;
+      }
+
+      filtrados.forEach(p => {
+        const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'Sin Carpeta' };
+        catalogGrid.innerHTML += `
+          <div class="product-card" onclick="verFicha('${p.id}')">
+            ${p.foto ? `<img src="${p.foto}" class="product-img">` : `<div class="product-img" style="display:flex; align-items:center; justify-content:center; color:var(--text-muted);">Sin foto</div>`}
+            <div class="product-body">
+              <div>
+                <strong style="font-size:1rem; display:block; margin-bottom:4px;">${p.nombre}</strong>
+                <span style="font-size:0.75rem; color:var(--text-muted);">📁 ${emp.nombre}</span>
+              </div>
+              <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.8rem; color:var(--text-muted);">${p.peso}g | ${p.horas}h ${p.minutos}m</span>
+                <strong style="color:var(--success); font-size:1.1rem;">${(p.precioVenta || 0).toFixed(2)} €</strong>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function filtrarCarpeta(empId) {
+      carpetaFiltroActual = empId;
+      renderCatalogo();
+    }
+
+    function verFicha(id) {
+      const p = productos.find(prod => prod.id === id);
+      if (!p) return;
+
+      const emp = empresas.find(e => e.id === p.empresaId) || { nombre: 'Sin Carpeta' };
+      const modalContent = document.getElementById('modalContent');
+
+      let filsHtml = '';
+      if (p.filamentosIds && p.filamentosIds.length > 0) {
+        filsHtml = p.filamentosIds.map(fid => {
+          const f = filamentos.find(item => item.id === fid);
+          if (!f) return '';
+          const btnComprar = f.url ? `<a href="${f.url}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none; padding:2px 6px; font-size:0.75rem;">🛒 Comprar</a>` : '';
+          return `<div style="display:flex; align-items:center; justify-content:space-between; background:var(--card-bg); padding:6px 10px; border-radius:6px; margin-bottom:4px; font-size:0.85rem;">
+            <span style="display:inline-flex; align-items:center; gap:6px;">
+              <span class="color-box-sample" style="background:${f.color_hex}; width:14px; height:14px;"></span>
+              <strong>${f.marca} ${f.tipo}</strong> - ${f.color} (${f.precio_kg} €/kg)
+            </span>
+            ${btnComprar}
+          </div>`;
+        }).join('');
+      }
+
+      let extrasHtml = '';
+      if (p.extras && p.extras.length > 0) {
+        extrasHtml = p.extras.map(ex => `<li>${ex.nombre}: <strong>${ex.precio.toFixed(2)} €</strong></li>`).join('');
+      }
+
+      modalContent.innerHTML = `
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+          ${p.foto ? `<img src="${p.foto}" style="max-width:200px; max-height:200px; border-radius:8px; object-fit:cover;">` : ''}
+          <div style="flex:1;">
+            <h2>${p.nombre}</h2>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:8px;">📁 Carpeta: ${emp.nombre}</p>
+            <p style="font-size:1.2rem; color:var(--success); font-weight:800; margin-bottom:12px;">Precio Unitario: ${(p.precioVenta || 0).toFixed(2)} €</p>
+            <p style="font-size:0.85rem;"><strong>Peso:</strong> ${p.peso} g | <strong>Tiempo:</strong> ${p.horas}h ${p.minutos}m</p>
+            <p style="font-size:0.85rem;"><strong>Colores:</strong> ${p.colores}</p>
+          </div>
+        </div>
+
+        ${filsHtml ? `<div style="margin-bottom:12px;"><strong>Filamentos utilizados:</strong><div style="margin-top:6px;">${filsHtml}</div></div>` : ''}
+        ${extrasHtml ? `<div style="margin-bottom:12px;"><strong>Componentes Extra:</strong><ul>${extrasHtml}</ul></div>` : ''}
+        ${p.notas ? `<div style="margin-bottom:16px; background:var(--card-bg); padding:10px; border-radius:6px; font-size:0.85rem;"><strong>Notas:</strong> ${p.notas}</div>` : ''}
+
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button class="btn btn-warning" onclick="editarProducto('${p.id}')">✏️ Editar Pieza</button>
+          <button class="btn btn-danger" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
+        </div>
+      `;
+
+      document.getElementById('modalProducto').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('modalProducto').classList.remove('active');
+    }
+
+    function editarProducto(id) {
+      const p = productos.find(prod => prod.id === id);
+      if (!p) return;
+
+      closeModal();
+      switchTab('calculadora');
+
+      document.getElementById('cProductoEditId').value = p.id;
+      document.getElementById('cNombre').value = p.nombre;
+      document.getElementById('cEmpresaSel').value = p.empresaId;
+      document.getElementById('cPeso').value = p.peso;
+      document.getElementById('cColores').value = p.colores;
+      document.getElementById('cHoras').value = p.horas;
+      document.getElementById('cMinutos').value = p.minutos;
+      document.getElementById('cDescuentoPct').value = p.descuentoPct || 0;
+      document.getElementById('cNotas').value = p.notas || '';
+
+      if (p.foto) {
+        document.getElementById('cFotoBase64').value = p.foto;
+        const imgPrev = document.getElementById('imgPreview');
+        imgPrev.src = p.foto;
+        imgPrev.style.display = 'block';
+      }
+
+      document.getElementById('cExtrasContainer').innerHTML = '';
+      if (p.extras && p.extras.length > 0) {
+        p.extras.forEach(ex => addExtraRow(ex.nombre, ex.precio));
+      }
+
+      const cbs = document.querySelectorAll('#cFilamentosChecklist input[type="checkbox"]');
+      cbs.forEach(cb => {
+        cb.checked = p.filamentosIds && p.filamentosIds.includes(cb.value);
+      });
+
+      document.getElementById('calcFormTitle').textContent = '✏️ Editando Pieza';
+      document.getElementById('btnCancelarEditProd').style.display = 'inline-flex';
+
+      calcular();
+    }
+
+    async function eliminarProducto(id) {
+      if (!confirm('¿Seguro que deseas eliminar esta pieza?')) return;
+      try {
+        const { error } = await _supabase.from('productos').delete().eq('id', id);
+        if (error) throw error;
+        closeModal();
+        await cargarDatosDesdeNube();
+      } catch (err) {
+        console.error(err);
+        alert('❌ Error al eliminar de Supabase');
+      }
+    }
+
+    function previewLogoEmpresa(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        document.getElementById('eLogoBase64').value = evt.target.result;
+        const imgPrev = document.getElementById('imgPreviewLogo');
+        imgPrev.src = evt.target.result;
+        imgPrev.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function guardarEmpresa(e) {
+      e.preventDefault();
+      const id = document.getElementById('eEmpresaEditId').value || generarUUID();
+      const nombre = document.getElementById('eNombreEmpresa').value.trim();
+      const padreId = document.getElementById('ePadreSel').value || null;
+      const logo = document.getElementById('eLogoBase64').value;
+
+      try {
+        const { error } = await _supabase.from('empresas').upsert({ id, nombre, padre_id: padreId, logo });
+        if (error) throw error;
+
+        resetFormEmpresa();
+        await cargarDatosDesdeNube();
+      } catch (err) {
+        console.error(err);
+        alert('❌ Error al guardar la carpeta');
+      }
+    }
+
+    function resetFormEmpresa() {
+      document.getElementById('eEmpresaEditId').value = '';
+      document.getElementById('eNombreEmpresa').value = '';
+      document.getElementById('eLogoBase64').value = '';
+      document.getElementById('imgPreviewLogo').style.display = 'none';
+      document.getElementById('eLogoEmpresa').value = '';
+      document.getElementById('empFormTitle').textContent = '➕ Crear Nueva Carpeta';
+      document.getElementById('btnCancelarEditEmp').style.display = 'none';
+    }
+
+    function renderEmpresas() {
+      const grid = document.getElementById('empresasGrid');
+      const padreSel = document.getElementById('ePadreSel');
+
+      padreSel.innerHTML = '<option value="">-- Ninguna (Carpeta Raíz) --</option>';
+      grid.innerHTML = '';
+
+      empresas.forEach(emp => {
+        padreSel.innerHTML += `<option value="${emp.id}">${emp.nombre}</option>`;
+
+        grid.innerHTML += `
+          <div class="product-card" style="padding:12px; align-items:center; text-align:center;">
+            ${emp.logo ? `<img src="${emp.logo}" style="width:50px; height:50px; object-fit:contain; margin-bottom:8px;">` : '<div style="font-size:2rem; margin-bottom:8px;">📁</div>'}
+            <strong>${emp.nombre}</strong>
+            <div style="display:flex; gap:6px; margin-top:10px;">
+              <button class="btn btn-warning btn-sm" onclick="editarEmpresa('${emp.id}')">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="eliminarEmpresa('${emp.id}')">🗑️</button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function editarEmpresa(id) {
+      const emp = empresas.find(e => e.id === id);
+      if (!emp) return;
+
+      document.getElementById('eEmpresaEditId').value = emp.id;
+      document.getElementById('eNombreEmpresa').value = emp.nombre;
+      document.getElementById('ePadreSel').value = emp.padre_id || '';
+
+      if (emp.logo) {
+        document.getElementById('eLogoBase64').value = emp.logo;
+        const imgPrev = document.getElementById('imgPreviewLogo');
+        imgPrev.src = emp.logo;
+        imgPrev.style.display = 'block';
+      }
+
+      document.getElementById('empFormTitle').textContent = '✏️ Editar Carpeta';
+      document.getElementById('btnCancelarEditEmp').style.display = 'inline-flex';
+    }
+
+    async function eliminarEmpresa(id) {
+      if (!confirm('¿Seguro que deseas eliminar esta carpeta?')) return;
+      try {
+        const { error } = await _supabase.from('empresas').delete().eq('id', id);
+        if (error) throw error;
+        await cargarDatosDesdeNube();
+      } catch (err) {
+        console.error(err);
+        alert('❌ Error al eliminar la carpeta');
+      }
+    }
+
+    function previewFotoFilamento(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        document.getElementById('fFotoBase64').value = evt.target.result;
+        const imgPrev = document.getElementById('imgPreviewFilamento');
+        imgPrev.src = evt.target.result;
+        imgPrev.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function guardarFilamento(e) {
+      e.preventDefault();
+      const id = document.getElementById('fFilamentoEditId').value || generarUUID();
+      const marca = document.getElementById('fMarca').value.trim();
+      const tipo = document.getElementById('fTipo').value.trim();
+      const color = document.getElementById('fColor').value.trim();
+      const colorHex = document.getElementById('fColorHex').value;
+      const precioKg = parseFloat(document.getElementById('fPrecioKg').value) || 20;
+      const url = document.getElementById('fUrl').value.trim();
+      const foto = document.getElementById('fFotoBase64').value;
+
+      const localColors = JSON.parse(localStorage.getItem('3d_fil_colors') || '{}');
+      localColors[id] = colorHex;
+      localStorage.setItem('3d_fil_colors', JSON.stringify(localColors));
+
+      try {
+        const { error } = await _supabase.from('filamentos').upsert({
+          id, marca, tipo, color, color_hex: colorHex, precio_kg: precioKg, url, foto
+        });
+
+        if (error) throw error;
+
+        resetFormFilamento();
+        await cargarDatosDesdeNube();
+      } catch (err) {
+        console.error(err);
+        alert('❌ Error al guardar el filamento');
+      }
+    }
+
+    function resetFormFilamento() {
+      document.getElementById('fFilamentoEditId').value = '';
+      document.getElementById('fMarca').value = '';
+      document.getElementById('fTipo').value = '';
+      document.getElementById('fColor').value = '';
+      document.getElementById('fColorHex').value = '#ef4444';
+      document.getElementById('fPrecioKg').value = '20';
+      document.getElementById('fUrl').value = '';
+      document.getElementById('fFotoBase64').value = '';
+      document.getElementById('fFoto').value = '';
+      document.getElementById('imgPreviewFilamento').style.display = 'none';
+
+      document.getElementById('filFormTitle').textContent = '➕ Registrar Nuevo Filamento';
+      document.getElementById('btnCancelarEditFil').style.display = 'none';
+    }
+
+    function renderFilamentos() {
+      const grid = document.getElementById('filamentosGrid');
+      grid.innerHTML = '';
+
+      filamentos.forEach(f => {
+        grid.innerHTML += `
+          <div class="product-card">
+            ${f.foto ? `<img src="${f.foto}" class="product-img" style="height:120px;">` : `<div class="product-img" style="height:120px; display:flex; align-items:center; justify-content:center; color:var(--text-muted);">Sin foto</div>`}
+            <div class="product-body" style="padding:10px;">
+              <div>
+                <strong style="font-size:0.9rem;">${f.marca} ${f.tipo}</strong>
+                <div style="display:flex; align-items:center; gap:6px; margin-top:4px; font-size:0.8rem;">
+                  <span class="color-box-sample" style="background:${f.color_hex};"></span>
+                  <span>${f.color}</span>
+                </div>
+              </div>
+              <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+                <strong style="color:var(--success); font-size:0.95rem;">${f.precio_kg} €/kg</strong>
+                <div style="display:flex; gap:4px;">
+                  <button class="btn btn-warning btn-sm" onclick="editarFilamento('${f.id}')">✏️</button>
+                  <button class="btn btn-danger btn-sm" onclick="eliminarFilamento('${f.id}')">🗑️</button>
+                </div>
+              </div>
+              ${f.url ? `<a href="${f.url}" target="_blank" style="font-size:0.75rem; color:var(--accent-hover); margin-top:6px; display:inline-block;">🔗 Enlace de compra</a>` : ''}
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function editarFilamento(id) {
+      const f = filamentos.find(item => item.id === id);
+      if (!f) return;
+
+      document.getElementById('fFilamentoEditId').value = f.id;
+      document.getElementById('fMarca').value = f.marca;
+      document.getElementById('fTipo').value = f.tipo;
+      document.getElementById('fColor').value = f.color;
+      document.getElementById('fColorHex').value = f.color_hex || '#ef4444';
+      document.getElementById('fPrecioKg').value = f.precio_kg;
+      document.getElementById('fUrl').value = f.url || '';
+
+      if (f.foto) {
+        document.getElementById('fFotoBase64').value = f.foto;
+        const imgPrev = document.getElementById('imgPreviewFilamento');
+        imgPrev.src = f.foto;
+        imgPrev.style.display = 'block';
+      }
+
+      document.getElementById('filFormTitle').textContent = '✏️ Editar Filamento';
+      document.getElementById('btnCancelarEditFil').style.display = 'inline-flex';
+    }
+
+    async function eliminarFilamento(id) {
+      if (!confirm('¿Seguro que deseas eliminar este filamento?')) return;
+      try {
+        const { error } = await _supabase.from('filamentos').delete().eq('id', id);
+        if (error) throw error;
+        await cargarDatosDesdeNube();
+      } catch (err) {
+        console.error(err);
+        alert('❌ Error al eliminar el filamento');
+      }
+    }
+
+    function cargarAjustesInputs() {
+      document.getElementById('cfgFilamento').value = config.filamento;
+      document.getElementById('cfgHoraMaquina').value = config.horaMaquina;
+      document.getElementById('cfgExtraColor').value = config.extraColor;
+      document.getElementById('cfgGastosFijos').value = config.gastosFijos;
+      document.getElementById('cfgMultiplicador').value = config.multiplicador;
+    }
+
+    function guardarAjustes() {
+      config.filamento = parseFloat(document.getElementById('cfgFilamento').value) || 20;
+      config.horaMaquina = parseFloat(document.getElementById('cfgHoraMaquina').value) || 0.20;
+      config.extraColor = parseFloat(document.getElementById('cfgExtraColor').value) || 0.05;
+      config.gastosFijos = parseFloat(document.getElementById('cfgGastosFijos').value) || 0.00;
+      config.multiplicador = parseFloat(document.getElementById('cfgMultiplicador').value) || 2.0;
+
+      localStorage.setItem('3d_cfg_v7', JSON.stringify(config));
+      alert('✅ Ajustes guardados correctamente');
+      calcular();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
       cargarDatosDesdeNube();
     });
   </script>
